@@ -25,7 +25,7 @@ BACKEND_VOICES = {
     },
     "silero": {
         "ru": {"male": "eugene", "female": "xenia"},
-        "en": {"male": "random", "female": "lj_16khz"},
+        "en": {"male": "random", "female": "en_0"},
     },
     "piper": {
         "ru": {"male": "ru_RU-dmitri-medium", "female": "ru_RU-irina-medium"},

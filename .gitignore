@@ -30,6 +30,12 @@ Desktop.ini
 
 # Audiobook output
 audiobooks/
+test_audio/
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.ogg
 
 # User config & logs (stored in ~/.audiobook-generator/)
 *.log
@@ -44,6 +50,13 @@ temp_audio/
 *.onnx
 *.onnx.json
 
+# Downloaded model files and local caches
+silero_models/
+.cache/
+*.pt
+*.pth
+*.ckpt
+
 # --- Testing ---
 .coverage
 .pytest_cache/
@@ -52,3 +65,13 @@ htmlcov/
 # --- Environment ---
 .env
 .env.local
+.env.*
+!.env.example
+settings.json
+settings.toml
+settings.yaml
+settings.yml
+*.local.json
+*.local.toml
+*.local.yaml
+*.local.yml

@@ -33,14 +33,14 @@ SILERO_VOICES = {
         ("random", "Случайный", "male"),
     ],
     "en": [
-        ("lj_16khz", "LJ Speech (женский)", "female"),
+        ("en_0", "English 0", "female"),
         ("random", "Random", "male"),
     ],
 }
 
 DEFAULT_SILERO_VOICES = {
     "ru": ("xenia", "eugene"),   # (озвучка, комментатор)
-    "en": ("lj_16khz", "random"),
+    "en": ("en_0", "random"),
 }
 
 # Маппинг Edge TTS префиксов → язык Silero
@@ -58,80 +58,89 @@ class SileroTTSManager(TTSBackend):
     и кэшируется в ~/.cache/torch/hub/ (~150 МБ).
     """
 
-    _model_instance = None
-    _model_lock = asyncio.Lock()
-
     def __init__(self, config):
         self.config = config
-        self._initialized = False
-        self._tts_main = None   # SileroTTS для русского текста (основной голос)
-        self._tts_comment = None  # SileroTTS для русского текста (комментатор)
-        self._tts_en_main = None  # SileroTTS для английского текста
+        self._tts_ru = None
+        self._tts_en = None
+        self._ru_model_lock = asyncio.Lock()
+        self._en_model_lock = asyncio.Lock()
+        self._en_initialization_attempted = False
+        self._device = None
         self._sample_rate = 48000
 
         # Маппим голоса из конфига
         self._main_voice = self._resolve_silero_voice(config.main_voice, is_comment=False)
         self._comment_voice = self._resolve_silero_voice(config.comment_voice, is_comment=True)
 
-    def _has_cyrillic(self, text: str) -> bool:
-        """Проверка, есть ли в тексте кириллица."""
-        import re
-        return bool(re.search(r'[а-яА-ЯёЁ]', text))
+    def _get_device(self) -> str:
+        """Выбрать устройство PyTorch один раз для всех моделей."""
+        if self._device is None:
+            import torch
 
-    async def _ensure_initialized(self):
-        """Ленивая инициализация — загрузка моделей при первом вызове."""
-        if self._initialized:
+            self._device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info("Silero: выбрано устройство %s", self._device)
+        return self._device
+
+    async def _ensure_ru_initialized(self):
+        """Ленивая инициализация единственного экземпляра русской модели."""
+        if self._tts_ru is not None:
             return
 
-        async with self._model_lock:
-            if self._initialized:
+        async with self._ru_model_lock:
+            if self._tts_ru is not None:
                 return
 
             try:
                 from silero_tts.silero_tts import SileroTTS
 
                 logger.info("Silero: загрузка русской модели v5_ru (~150 МБ)...")
-                self._tts_main = SileroTTS(
+                self._tts_ru = SileroTTS(
                     model_id="v5_ru",
                     language="ru",
                     speaker=self._main_voice,
                     sample_rate=self._sample_rate,
-                    device="cpu",
+                    device=self._get_device(),
                 )
-
-                if self._comment_voice != self._main_voice:
-                    self._tts_comment = SileroTTS(
-                        model_id="v5_ru",
-                        language="ru",
-                        speaker=self._comment_voice,
-                        sample_rate=self._sample_rate,
-                        device="cpu",
-                    )
-                else:
-                    self._tts_comment = self._tts_main
-
-                logger.info("Silero: загрузка английской модели lj_16khz...")
-                try:
-                    self._tts_en_main = SileroTTS(
-                        model_id="v3_en",
-                        language="en",
-                        speaker="lj_16khz",
-                        sample_rate=self._sample_rate,
-                        device="cpu",
-                    )
-                    logger.info("Silero: английская модель загружена (lj_16khz)")
-                except Exception as e:
-                    logger.warning("Silero: не удалось загрузить английскую модель: %s", e)
-                    self._tts_en_main = None
-
-                self._initialized = True
-                logger.info("Silero TTS v5 инициализирован")
+                logger.info("Silero: русская модель v5_ru загружена")
             except Exception as e:
                 raise RuntimeError(
                     f"Ошибка загрузки Silero TTS: {e}. "
                     f"Убедитесь, что установлен PyTorch: "
-                    f"pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu"
+                    f"pip install torch torchaudio"
                 ) from e
+
+    async def _ensure_en_initialized(self) -> bool:
+        """Лениво загрузить английскую модель только для латинского текста."""
+        if self._tts_en is not None:
+            return True
+        if self._en_initialization_attempted:
+            return False
+
+        async with self._en_model_lock:
+            if self._tts_en is not None:
+                return True
+            if self._en_initialization_attempted:
+                return False
+
+            self._en_initialization_attempted = True
+            try:
+                from silero_tts.silero_tts import SileroTTS
+
+                logger.info("Silero: загрузка английской модели v3_en...")
+                self._tts_en = SileroTTS(
+                    model_id="v3_en",
+                    language="en",
+                    speaker=DEFAULT_SILERO_VOICES["en"][0],
+                    sample_rate=self._sample_rate,
+                    device=self._get_device(),
+                )
+                logger.info("Silero: английская модель v3_en загружена")
+                return True
+            except Exception as e:
+                logger.warning("Silero: не удалось загрузить английскую модель: %s", e)
+                self._tts_en = None
+                return False
+
     def _resolve_silero_voice(self, voice_name: str, is_comment: bool = False) -> str:
         """Сопоставить имя голоса из конфига с голосом Silero.
 
@@ -139,7 +148,7 @@ class SileroTTSManager(TTSBackend):
         Если это Edge TTS голос — подставляем голос по умолчанию.
         """
         # Если голос уже Silero
-        known_voices = {"xenia", "eugene", "random", "lj_16khz"}
+        known_voices = {"xenia", "eugene", "random", "en_0"}
         if voice_name.lower() in known_voices:
             return voice_name.lower()
 
@@ -157,9 +166,12 @@ class SileroTTSManager(TTSBackend):
         return default[1] if is_comment else default[0]
 
     def _detect_lang(self, text: str) -> str:
-        """Определение языка текста по наличию кириллицы."""
-        has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text))
-        return "ru" if has_cyrillic else "en"
+        """Определить язык без маршрутизации смешанных сегментов."""
+        if re.search(r'[а-яА-ЯёЁ]', text):
+            return "ru"
+        if re.search(r'[a-zA-Z]', text):
+            return "en"
+        return "ru"
 
     async def synthesize_segment(
         self,
@@ -181,8 +193,6 @@ class SileroTTSManager(TTSBackend):
         Returns:
             Путь к MP3-файлу.
         """
-        await self._ensure_initialized()
-
         if output_dir is None:
             output_dir = Path.cwd() / "temp_audio"
         output_dir = Path(output_dir)
@@ -212,22 +222,22 @@ class SileroTTSManager(TTSBackend):
 
         # Нормализуем имя голоса
         voice_name = voice.lower()
-        known_voices = {"xenia", "eugene", "random", "lj_16khz"}
+        known_voices = {"xenia", "eugene", "random", "en_0"}
         if voice_name not in known_voices:
             voice_name = self._resolve_silero_voice(voice, is_comment=False)
 
         # Синтезируем
         try:
             # Выбираем модель по языку текста
-            if self._has_cyrillic(text):
-                if voice_name == self._comment_voice and self._tts_comment is not None:
-                    tts = self._tts_comment
-                else:
-                    tts = self._tts_main
+            if lang == "ru":
+                await self._ensure_ru_initialized()
+                tts = self._tts_ru
+                tts.change_speaker(voice_name)
             else:
                 # Английский текст — используем английскую модель
-                if self._tts_en_main is not None:
-                    tts = self._tts_en_main
+                if await self._ensure_en_initialized():
+                    tts = self._tts_en
+                    tts.change_speaker(voice_name)
                 else:
                     # Английской модели нет — тишина
                     logger.warning(
@@ -331,7 +341,6 @@ class SileroTTSManager(TTSBackend):
 
         Полностью аналогичен SupertonicTTSManager.synthesize_chapter по логике.
         """
-        await self._ensure_initialized()
         chapter_dir.mkdir(parents=True, exist_ok=True)
 
         total = len(text_segments) + len([c for c in comment_segments if c])
