@@ -36,6 +36,7 @@ class Settings:
     # Пол голосов TTS (резолвятся в имена через движок + язык книги)
     main_gender: str = "female"
     comment_gender: str = "female"
+    use_gpu: bool = True
     main_speed: float = 1.0
     comment_speed: float = 1.0
 

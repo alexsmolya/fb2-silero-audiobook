@@ -18,12 +18,16 @@ import asyncio
 import logging
 import re
 import subprocess
+import tomllib
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Pattern, Tuple
 
 from src.core.tts_base import TTSBackend
 
 logger = logging.getLogger(__name__)
+
+PRONUNCIATIONS_PATH = Path.home() / ".audiobook-generator" / "pronunciations.toml"
+PronunciationRule = Tuple[Pattern[str], str]
 
 # Доступные голоса Silero
 SILERO_VOICES = {
@@ -42,6 +46,7 @@ DEFAULT_SILERO_VOICES = {
     "ru": ("xenia", "eugene"),   # (озвучка, комментатор)
     "en": ("en_0", "random"),
 }
+SILERO_RU_MODEL_ID = "v5_5_ru"
 
 # Маппинг Edge TTS префиксов → язык Silero
 EDGE_PREFIX_TO_LANG = {
@@ -49,6 +54,74 @@ EDGE_PREFIX_TO_LANG = {
     "en-US": "en",
     "en-GB": "en",
 }
+
+
+def load_pronunciations(
+    path: Path = PRONUNCIATIONS_PATH,
+) -> List[PronunciationRule]:
+    """Загрузить и скомпилировать русский словарь произношений Silero."""
+    try:
+        with path.open("rb") as file:
+            data = tomllib.load(file)
+    except FileNotFoundError:
+        return []
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        logger.warning(
+            "Silero: не удалось загрузить словарь произношений %s: %s. "
+            "Синтез продолжится без пользовательских замен.",
+            path,
+            exc,
+        )
+        return []
+
+    ru_entries = data.get("ru", {})
+    if not isinstance(ru_entries, dict):
+        logger.warning(
+            "Silero: секция [ru] в словаре произношений %s должна быть таблицей. "
+            "Синтез продолжится без пользовательских замен.",
+            path,
+        )
+        return []
+
+    rules: List[PronunciationRule] = []
+    entries = sorted(ru_entries.items(), key=lambda item: len(item[0]), reverse=True)
+    for source, replacement in entries:
+        if not source or not isinstance(replacement, str):
+            logger.warning(
+                "Silero: пропущено некорректное правило произношения %r в %s",
+                source,
+                path,
+            )
+            continue
+        pattern = re.compile(
+            rf"(?<!\w){re.escape(source)}(?!\w)",
+            flags=re.IGNORECASE,
+        )
+        rules.append((pattern, replacement))
+
+    logger.info("Silero: загружено правил произношения: %d", len(rules))
+    return rules
+
+
+def apply_pronunciations(text: str, rules: List[PronunciationRule]) -> str:
+    """Применить правила без учёта регистра, сохранив первую заглавную букву."""
+    def replace_match(match: re.Match[str], replacement: str) -> str:
+        matched_first = next((char for char in match.group(0) if char.isalpha()), "")
+        if not matched_first.isupper():
+            return replacement
+
+        for index, char in enumerate(replacement):
+            if char.isalpha():
+                return replacement[:index] + char.upper() + replacement[index + 1:]
+        return replacement
+
+    result = text
+    for pattern, replacement in rules:
+        result = pattern.sub(
+            lambda match, value=replacement: replace_match(match, value),
+            result,
+        )
+    return result
 
 
 class SileroTTSManager(TTSBackend):
@@ -67,6 +140,7 @@ class SileroTTSManager(TTSBackend):
         self._en_initialization_attempted = False
         self._device = None
         self._sample_rate = 48000
+        self._ru_pronunciation_rules = load_pronunciations()
 
         # Маппим голоса из конфига
         self._main_voice = self._resolve_silero_voice(config.main_voice, is_comment=False)
@@ -93,15 +167,21 @@ class SileroTTSManager(TTSBackend):
             try:
                 from silero_tts.silero_tts import SileroTTS
 
-                logger.info("Silero: загрузка русской модели v5_ru (~150 МБ)...")
+                logger.info(
+                    "Silero: загрузка русской модели %s (~150 МБ)...",
+                    SILERO_RU_MODEL_ID,
+                )
                 self._tts_ru = SileroTTS(
-                    model_id="v5_ru",
+                    model_id=SILERO_RU_MODEL_ID,
                     language="ru",
                     speaker=self._main_voice,
                     sample_rate=self._sample_rate,
                     device=self._get_device(),
                 )
-                logger.info("Silero: русская модель v5_ru загружена")
+                logger.info(
+                    "Silero: русская модель %s загружена",
+                    SILERO_RU_MODEL_ID,
+                )
             except Exception as e:
                 raise RuntimeError(
                     f"Ошибка загрузки Silero TTS: {e}. "
@@ -247,8 +327,14 @@ class SileroTTSManager(TTSBackend):
                     await self._generate_silence_mp3(mp3_path, duration_sec=0.5)
                     return mp3_path
 
-            # SileroTTS.tts() записывает WAV напрямую
-            tts.tts(text, str(wav_path))
+            # SileroTTS.tts() записывает WAV напрямую. Пользовательские ударения
+            # применяются только здесь и только к русскому тексту Silero.
+            text_for_tts = (
+                apply_pronunciations(text, self._ru_pronunciation_rules)
+                if lang == "ru"
+                else text
+            )
+            tts.tts(text_for_tts, str(wav_path))
 
             # Проверяем, что WAV не пустой (silero может "успешно" сохранить пустышку
             # для неподдерживаемого языка или символов)

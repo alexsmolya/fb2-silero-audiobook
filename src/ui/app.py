@@ -130,14 +130,14 @@ class AudiobookApp(ctk.CTk):
         )
         self.wizard.show_first_page()
 
-    def update_ui_language(self):
+    def update_ui_language(self, lang_code: str):
         """Обновление языка интерфейса в заголовках окна."""
-        t = APP_HEADER_TEXTS.get(self.settings.ui_lang, APP_HEADER_TEXTS["ru"])
+        t = APP_HEADER_TEXTS.get(lang_code, APP_HEADER_TEXTS["ru"])
         self.header_label.configure(text=t["title"])
         self.subtitle_label.configure(text=t["subtitle"])
         # Обновляем заголовок в мастере
         if self.wizard:
-            self.wizard.update_step_language(self.settings.ui_lang)
+            self.wizard.update_step_language(lang_code)
 
     def _load_saved_key(self):
         """Загрузка сохранённого API-ключа."""
