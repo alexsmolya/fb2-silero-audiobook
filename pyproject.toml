@@ -7,7 +7,7 @@ name = "book-v2-audio"
 version = "0.2.0"
 description = "FB2 → audiobook with AI-powered Porfiry commentary"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12,<3.13"
 license = {text = "MIT"}
 
 authors = [
@@ -33,21 +33,22 @@ classifiers = [
     "Natural Language :: Russian",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
     "Topic :: Text Processing :: Linguistic",
 ]
 
 dependencies = [
-    "customtkinter>=5.2.0",
-    "defusedxml>=0.7.1",
-    "httpx>=0.27.0",
-    "edge-tts>=6.1.0",
-    "keyring>=25.0.0",
-    "tomli-w>=1.0.0",
-    "spacy>=3.7.0",
-    "Pillow>=10.0.0",
-    "cryptography>=41.0.0",
+    "customtkinter==6.0.0",
+    "defusedxml==0.7.1",
+    "httpx==0.28.1",
+    "edge-tts==7.2.8",
+    "keyring==25.7.0",
+    "tomli-w==1.2.0",
+    "spacy==3.8.14",
+    "Pillow==12.3.0",
+    "cryptography==49.0.0",
+    "click==8.4.2",
 ]
 
 [project.optional-dependencies]
@@ -55,10 +56,10 @@ supertonic = [
     "supertonic>=1.0.0",
 ]
 silero = [
-    "silero-tts>=0.0.5",
-    "scipy>=1.10.0",
-    "torch>=2.0.0",
-    "torchaudio>=2.0.0",
+    "silero-tts==0.0.5",
+    "scipy==1.18.0",
+    "torch==2.13.0",
+    "torchaudio==2.11.0",
 ]
 dev = [
     "pytest>=8.0.0",
