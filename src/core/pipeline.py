@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -19,6 +21,7 @@ from .comment_manager import CommentManager, CommentConfig
 from .tts_manager import TTSManager, TTSConfig
 from .audio_assembler import AudioAssembler
 from .checkpoint_manager import CheckpointManager, Checkpoint
+from src.utils.exceptions import PipelineCanceledError
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +77,7 @@ class Pipeline:
         self._pause_event = threading.Event()
         self._pause_event.set()  # не на паузе
         self._cancel_event = threading.Event()  # не отменён
+        self._active_cancel_event: Optional[threading.Event] = None
 
     async def run(
         self,
@@ -97,14 +101,24 @@ class Pipeline:
         if cancel_event is None:
             cancel_event = self._cancel_event
 
-        self._temp_dir = self.config.work_dir / "temp_audio"
+        self._check_canceled(cancel_event)
+        self._active_cancel_event = cancel_event
+
+        self.config.work_dir.mkdir(parents=True, exist_ok=True)
+        self._temp_dir = Path(tempfile.mkdtemp(
+            prefix="audiobook-run-",
+            dir=self.config.work_dir,
+        ))
         self._chapter_audio_paths = []
+        partial_output_path: Optional[Path] = None
 
         try:
             # Шаг 1: Парсинг FB2
+            self._check_canceled(cancel_event)
             self._report(progress_callback, "Парсинг FB2-файла...", 0.0)
             book = self.fb2_parser.parse(self.config.book_path)
             self._book = book
+            self._check_canceled(cancel_event)
 
             if not book.chapters:
                 raise ValueError("В книге нет глав")
@@ -143,9 +157,7 @@ class Pipeline:
 
             # Шаг 2-4: Обработка каждой главы
             for idx, chapter in enumerate(chapters_to_process):
-                if cancel_event.is_set():
-                    self._report(progress_callback, "Процесс отменён", 0.0)
-                    break
+                self._check_canceled(cancel_event)
 
                 # Ожидание снятия паузы
                 self._pause_event.wait()
@@ -198,9 +210,11 @@ class Pipeline:
                     comment_segments=comments,
                     chapter_dir=chapter_dir,
                     detail_callback=detail_callback,
+                    cancel_event=cancel_event,
                 )
 
                 # Склейка аудиофрагментов главы
+                self._check_canceled(cancel_event)
                 self._report(
                     progress_callback,
                     f"Глава {chapter_num + 1}/{total_chapters}: склейка аудио...",
@@ -208,7 +222,7 @@ class Pipeline:
                 )
 
                 chapter_audio = await self._assemble_chapter_audio(
-                    sentences, comments, chapter_dir, chapter_num,
+                    sentences, comments, chapter_dir, chapter_num, cancel_event,
                 )
                 self._chapter_audio_paths.append(chapter_audio)
 
@@ -230,55 +244,74 @@ class Pipeline:
 
             # Шаг 5: Склейка книги
             if self._chapter_audio_paths:
-                if cancel_event.is_set():
-                    # Пользователь отменил процесс, но часть глав уже готова
-                    self._report(
-                        progress_callback,
-                        "Процесс отменён. Готовые главы не склеены в книгу.",
-                        0.0,
-                    )
-                    return Path("")
-                else:
-                    self._report(
-                        progress_callback,
-                        "Склейка всех глав в аудиокнигу...",
-                        0.95,
-                    )
+                self._check_canceled(cancel_event)
+                self._report(
+                    progress_callback,
+                    "Склейка всех глав в аудиокнигу...",
+                    0.95,
+                )
 
-                    output_filename = f"{book.metadata.title}.mp3"
-                    # Очищаем имя файла от недопустимых символов
-                    output_filename = "".join(
-                        c for c in output_filename
-                        if c.isalnum() or c in " .-_()"
-                    ).strip()
+                output_filename = f"{book.metadata.title}.mp3"
+                # Очищаем имя файла от недопустимых символов
+                output_filename = "".join(
+                    c for c in output_filename
+                    if c.isalnum() or c in " .-_()"
+                ).strip()
 
-                    output_path = self.config.output_dir / output_filename
-                    self.audio_assembler.assemble_book(
-                        self._chapter_audio_paths,
-                        output_path,
-                    )
+                output_path = self.config.output_dir / output_filename
+                self.config.output_dir.mkdir(parents=True, exist_ok=True)
+                fd, partial_name = tempfile.mkstemp(
+                    prefix=f".{output_filename}.",
+                    suffix=".partial.mp3",
+                    dir=self.config.output_dir,
+                )
+                os.close(fd)
+                partial_output_path = Path(partial_name)
+                self.audio_assembler.assemble_book(
+                    self._chapter_audio_paths,
+                    partial_output_path,
+                    cancel_event=cancel_event,
+                )
+                self._check_canceled(cancel_event)
+                os.replace(partial_output_path, output_path)
+                partial_output_path = None
 
-                    # Очистка чекпоинта
-                    self.checkpoint_manager.clear()
+                # Очистка чекпоинта
+                self.checkpoint_manager.clear()
 
-                    self._report(
-                        progress_callback,
-                        f"Аудиокнига готова: {output_path}",
-                        1.0,
-                    )
+                self._report(
+                    progress_callback,
+                    f"Аудиокнига готова: {output_path}",
+                    1.0,
+                )
 
-                    return output_path
+                return output_path
 
             else:
-                if cancel_event.is_set():
-                    raise ValueError("Создание аудиокниги отменено")
-                else:
-                    raise ValueError("Не удалось создать аудиокнигу: нет обработанных глав")
+                self._check_canceled(cancel_event)
+                raise ValueError("Не удалось создать аудиокнигу: нет обработанных глав")
 
         finally:
+            self._active_cancel_event = None
+            if partial_output_path is not None and partial_output_path.exists():
+                try:
+                    partial_output_path.unlink()
+                except OSError:
+                    self._report(
+                        progress_callback,
+                        f"Не удалось удалить временный файл: {partial_output_path}",
+                        0.0,
+                    )
             # Очистка временных файлов
             if self._temp_dir and self._temp_dir.exists():
-                self.audio_assembler.cleanup_temp_files(self._temp_dir)
+                try:
+                    self.audio_assembler.cleanup_temp_files(self._temp_dir)
+                except OSError:
+                    self._report(
+                        progress_callback,
+                        f"Не удалось удалить временный каталог: {self._temp_dir}",
+                        0.0,
+                    )
 
             # Очищаем чекпоинт при любом прерывании (кроме успешного завершения):
             # временные файлы удалены, так что чекпоинт бесполезен.
@@ -292,6 +325,7 @@ class Pipeline:
         comments: List[Optional[str]],
         chapter_dir: Path,
         chapter_num: int,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Path:
         """Сборка аудиофрагментов главы в один файл."""
         segments: List[Tuple[Path, float]] = []
@@ -319,7 +353,11 @@ class Pipeline:
                     segments[-1] = (segments[-1][0], tts_cfg.pause_after_comment)
 
         chapter_output = self._temp_dir / f"chapter_{chapter_num:04d}_audio.wav"
-        return self.audio_assembler.assemble_chapter(segments, chapter_output)
+        return self.audio_assembler.assemble_chapter(
+            segments,
+            chapter_output,
+            cancel_event=cancel_event,
+        )
 
     def pause(self):
         """Поставить процесс на паузу."""
@@ -336,6 +374,8 @@ class Pipeline:
     def cancel(self):
         """Отменить процесс."""
         self._cancel_event.set()
+        if self._active_cancel_event is not None:
+            self._active_cancel_event.set()
         self._pause_event.set()  # снимаем с паузы, чтобы процесс завершился
         logger.info("Процесс отменён")
 
@@ -357,6 +397,11 @@ class Pipeline:
         if callback:
             callback(message, progress)
         logger.info("[%.0f%%] %s", progress * 100, message)
+
+    @staticmethod
+    def _check_canceled(cancel_event: threading.Event) -> None:
+        if cancel_event.is_set():
+            raise PipelineCanceledError("Обработка отменена пользователем")
 
     async def close(self):
         """Освобождение ресурсов."""

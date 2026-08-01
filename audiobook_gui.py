@@ -19,6 +19,7 @@ from src.config.settings import Settings, load_settings, save_settings
 from src.core.comment_manager import CommentConfig
 from src.core.pipeline import AppConfig, Pipeline
 from src.core.tts_manager import BACKEND_NAMES, BACKEND_VOICES, TTSConfig
+from src.utils.exceptions import PipelineCanceledError
 
 
 LANGUAGES = {
@@ -152,6 +153,12 @@ class AudiobookGeneratorGUI:
         self.voice_values: dict[str, str] = {}
         self.started_at: Optional[float] = None
         self.last_result_path: Optional[Path] = None
+        self.cancel_event: Optional[threading.Event] = None
+        self.worker_done_event: Optional[threading.Event] = None
+        self.worker_outcome: Optional[tuple] = None
+        self.terminal_handled = False
+        self.cancel_requested = False
+        self.close_after_worker = False
         self.cuda_visible_devices_was_set = "CUDA_VISIBLE_DEVICES" in os.environ
         self.initial_cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
 
@@ -320,6 +327,15 @@ class AudiobookGeneratorGUI:
         self.start_button.grid(
             row=0, column=0, sticky="ew", ipady=7
         )
+        self.cancel_button = ttk.Button(
+            button_frame,
+            text="Прервать",
+            command=self._request_cancel,
+            state="disabled",
+        )
+        self.cancel_button.grid(
+            row=0, column=1, padx=(10, 0), ipady=7
+        )
         self.open_folder_button = ttk.Button(
             button_frame,
             text="Открыть папку",
@@ -327,7 +343,7 @@ class AudiobookGeneratorGUI:
             state="disabled",
         )
         self.open_folder_button.grid(
-            row=0, column=1, padx=(10, 0), ipady=7
+            row=0, column=2, padx=(10, 0), ipady=7
         )
 
         self._append_log(
@@ -474,24 +490,41 @@ class AudiobookGeneratorGUI:
             voice,
         )
         self.pipeline = Pipeline(config)
+        self.cancel_event = threading.Event()
+        self.worker_done_event = threading.Event()
+        self.worker_outcome = None
+        self.terminal_handled = False
+        self.cancel_requested = False
         self.started_at = time.monotonic()
         self.last_result_path = None
         self.progress["value"] = 0
         self.start_button.configure(text="Идёт обработка…")
         self.start_button.state(["disabled"])
+        self.cancel_button.configure(text="Прервать")
+        self.cancel_button.state(["!disabled"])
         self.open_folder_button.state(["disabled"])
         self._append_log(
             f"Запуск: {book_path.name}; движок: {backend}; голос: {voice}"
         )
 
         self.worker = threading.Thread(
-            target=self._run_pipeline,
-            args=(self.pipeline,),
+            target=self._worker_entry,
+            args=(self.pipeline, self.worker_done_event),
             daemon=True,
         )
         self.worker.start()
 
-    def _run_pipeline(self, pipeline: Pipeline) -> None:
+    def _worker_entry(
+        self,
+        pipeline: Pipeline,
+        done_event: threading.Event,
+    ) -> None:
+        try:
+            self.worker_outcome = self._run_pipeline(pipeline)
+        finally:
+            done_event.set()
+
+    def _run_pipeline(self, pipeline: Pipeline) -> tuple:
         def progress_callback(status: str, progress: float, **_details) -> None:
             self.events.put(("progress", status, progress))
 
@@ -514,64 +547,129 @@ class AudiobookGeneratorGUI:
                 pipeline.run(
                     progress_callback=progress_callback,
                     detail_callback=detail_callback,
+                    cancel_event=self.cancel_event,
                 )
             )
             if not result or not result.is_file():
                 raise RuntimeError("Pipeline не вернул созданный аудиофайл")
-            self.events.put(("success", result))
+            return ("success", result)
+        except PipelineCanceledError:
+            return ("canceled",)
         except Exception as exc:
-            self.events.put(("error", str(exc), traceback.format_exc()))
+            return ("error", str(exc), traceback.format_exc())
+
+    def _request_cancel(self) -> None:
+        """Запросить кооперативную остановку активного запуска."""
+        if self.cancel_requested or not self.worker:
+            return
+        self.cancel_requested = True
+        self.cancel_button.configure(text="Останавливаем…")
+        self.cancel_button.state(["disabled"])
+        if self.cancel_event is not None:
+            self.cancel_event.set()
+        if self.pipeline is not None:
+            self.pipeline.cancel()
 
     def _poll_events(self) -> None:
         try:
             while True:
                 event = self.events.get_nowait()
-                kind = event[0]
-                if kind == "progress":
-                    _, status, progress = event
-                    self.progress["value"] = max(0, min(100, progress * 100))
-                    if not status.startswith("Аудиокнига готова:"):
-                        self._append_log(status)
-                elif kind == "success":
-                    _, result = event
-                    result_path = Path(result)
-                    started_at = self.started_at or time.monotonic()
-                    elapsed = time.monotonic() - started_at
-                    self.progress["value"] = 100
-                    self._append_log(
-                        f"Готово за {format_duration(elapsed)} · "
-                        f"{format_file_size(result_path)}: {result_path}"
-                    )
-                    self.started_at = None
-                    self.last_result_path = result_path
-                    self.start_button.configure(text="Создать ещё одну")
-                    self.start_button.state(["!disabled"])
-                    self.open_folder_button.state(["!disabled"])
-                    self.pipeline = None
-                    self.worker = None
-                elif kind == "error":
-                    _, error, details = event
-                    self._append_log(f"Ошибка: {error}")
-                    self._append_log(details)
-                    self.started_at = None
-                    self.last_result_path = None
-                    self.start_button.configure(text="Создать аудиокнигу")
-                    self.start_button.state(["!disabled"])
-                    self.open_folder_button.state(["disabled"])
-                    self.pipeline = None
-                    self.worker = None
-                elif kind == "open_error":
-                    _, error = event
-                    messagebox.showerror(
-                        "Ошибка",
-                        f"Не удалось открыть папку:\n{error}",
-                        parent=self.root,
-                    )
+                self._handle_event(event)
         except queue.Empty:
             pass
 
+        if self._poll_worker_completion():
+            return
+
         if self.root.winfo_exists():
             self.root.after(100, self._poll_events)
+
+    def _poll_worker_completion(self) -> bool:
+        """Применить единственный итог только после завершения worker-thread."""
+        if (
+            self.worker is None
+            or self.worker_done_event is None
+            or not self.worker_done_event.is_set()
+            or self.worker.is_alive()
+            or self.worker_outcome is None
+        ):
+            return False
+        will_close = self.close_after_worker
+        self._handle_event(self.worker_outcome)
+        return will_close
+
+    def _handle_event(self, event: tuple) -> None:
+        """Обработать одно worker-событие в GUI-потоке."""
+        kind = event[0]
+        if kind in {"success", "canceled", "error"}:
+            if self.terminal_handled:
+                return
+            self.terminal_handled = True
+        if kind == "progress":
+            _, status, progress = event
+            self.progress["value"] = max(0, min(100, progress * 100))
+            if not status.startswith("Аудиокнига готова:"):
+                self._append_log(status)
+        elif kind == "success":
+            if self.cancel_requested:
+                self._finish_canceled()
+                return
+            _, result = event
+            result_path = Path(result)
+            started_at = self.started_at or time.monotonic()
+            elapsed = time.monotonic() - started_at
+            self.progress["value"] = 100
+            self._append_log(
+                f"Готово за {format_duration(elapsed)} · "
+                f"{format_file_size(result_path)}: {result_path}"
+            )
+            self.started_at = None
+            self.last_result_path = result_path
+            self.start_button.configure(text="Создать ещё одну")
+            self.start_button.state(["!disabled"])
+            self.open_folder_button.state(["!disabled"])
+            self._finish_worker()
+        elif kind == "canceled":
+            self._finish_canceled()
+        elif kind == "error":
+            _, error, details = event
+            self._append_log(f"Ошибка: {error}")
+            self._append_log(details)
+            self.started_at = None
+            self.last_result_path = None
+            self.start_button.configure(text="Создать аудиокнигу")
+            self.start_button.state(["!disabled"])
+            self.open_folder_button.state(["disabled"])
+            self._finish_worker()
+        elif kind == "open_error":
+            _, error = event
+            messagebox.showerror(
+                "Ошибка",
+                f"Не удалось открыть папку:\n{error}",
+                parent=self.root,
+            )
+
+    def _finish_canceled(self) -> None:
+        self._append_log("Обработка отменена пользователем")
+        self.progress["value"] = 0
+        self.started_at = None
+        self.last_result_path = None
+        self.start_button.configure(text="Создать аудиокнигу")
+        self.start_button.state(["!disabled"])
+        self.open_folder_button.state(["disabled"])
+        self._finish_worker()
+
+    def _finish_worker(self) -> None:
+        self.cancel_button.configure(text="Прервать")
+        self.cancel_button.state(["disabled"])
+        self.pipeline = None
+        self.worker = None
+        self.cancel_event = None
+        self.worker_done_event = None
+        self.worker_outcome = None
+        self.cancel_requested = False
+        if self.close_after_worker:
+            self.root.destroy()
 
     def _append_log(self, message: str) -> None:
         self.log.configure(state="normal")
@@ -611,8 +709,16 @@ class AudiobookGeneratorGUI:
             self.events.put(("open_error", error))
 
     def _on_close(self) -> None:
-        if self.pipeline:
-            self.pipeline.cancel()
+        if self.worker and self.worker.is_alive():
+            if not messagebox.askyesno(
+                "Выход",
+                "Прервать обработку и выйти?",
+                parent=self.root,
+            ):
+                return
+            self.close_after_worker = True
+            self._request_cancel()
+            return
         self.root.destroy()
 
 

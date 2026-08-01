@@ -6,11 +6,13 @@
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from src.core.tts_base import TTSBackend
+from src.utils.exceptions import PipelineCanceledError
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +146,7 @@ class TTSManager:
         chapter_dir: Path,
         progress_callback: Optional[Callable[[int, int], None]] = None,
         detail_callback: Optional[Callable[[int, int, str, str, str], None]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Path:
         """Синтез целой главы с комментариями.
 
@@ -159,6 +162,30 @@ class TTSManager:
         """
         backend = await self._get_backend()
 
+        def check_canceled() -> None:
+            if cancel_event is not None and cancel_event.is_set():
+                raise PipelineCanceledError("Обработка отменена пользователем")
+
+        def checked_progress(completed: int, total: int) -> None:
+            # Backend вызывает этот callback сразу после атомарного TTS-вызова.
+            check_canceled()
+            if progress_callback:
+                progress_callback(completed, total)
+
+        def checked_detail(
+            completed: int,
+            total: int,
+            text: str,
+            voice: str,
+            backend_name: str,
+        ) -> None:
+            # Backend вызывает этот callback непосредственно перед фрагментом.
+            check_canceled()
+            if detail_callback:
+                detail_callback(completed, total, text, voice, backend_name)
+
+        check_canceled()
+
         # EdgeTTSManager имеет detail_callback, PiperTTSManager — нет
         if hasattr(backend, 'synthesize_chapter'):
             # Пробуем передать detail_callback, если бэкенд его поддерживает
@@ -167,13 +194,13 @@ class TTSManager:
             if 'detail_callback' in sig.parameters:
                 return await backend.synthesize_chapter(
                     text_segments, comment_segments, chapter_dir,
-                    progress_callback=progress_callback,
-                    detail_callback=detail_callback,
+                    progress_callback=checked_progress,
+                    detail_callback=checked_detail,
                 )
 
         return await backend.synthesize_chapter(
             text_segments, comment_segments, chapter_dir,
-            progress_callback=progress_callback,
+            progress_callback=checked_progress,
         )
 
     async def get_available_voices(self, lang: str = "") -> List[Dict[str, Any]]:

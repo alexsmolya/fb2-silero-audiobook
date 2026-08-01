@@ -13,8 +13,11 @@ import os
 import shutil
 import subprocess as sp
 import tempfile
+import threading
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
+
+from src.utils.exceptions import PipelineCanceledError
 
 logger = logging.getLogger(__name__)
 
@@ -65,20 +68,62 @@ class AudioAssembler:
             )
         return exe
 
-    def _run_ffmpeg(self, args: List[str], **kwargs) -> None:
+    @staticmethod
+    def _check_canceled(cancel_event: Optional[threading.Event]) -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            raise PipelineCanceledError("Обработка отменена пользователем")
+
+    def _run_ffmpeg(
+        self,
+        args: List[str],
+        cancel_event: Optional[threading.Event] = None,
+        **kwargs,
+    ) -> None:
         """Запуск ffmpeg с логированием."""
+        self._check_canceled(cancel_event)
         cmd = [self._ffmpeg] + args
         logger.debug("ffmpeg: %s", " ".join(str(a) for a in cmd))
+        process = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, **kwargs)
         try:
-            sp.run(cmd, check=True, capture_output=True, **kwargs)
-        except sp.CalledProcessError as exc:
-            stderr = exc.stderr.decode("utf-8", errors="replace") if exc.stderr else ""
-            logger.error("ffmpeg error (code %d): %s", exc.returncode, stderr)
-            raise RuntimeError(
-                f"Ошибка ffmpeg (код {exc.returncode}): {stderr[:500]}"
-            ) from exc
+            while True:
+                try:
+                    _, stderr_bytes = process.communicate(timeout=0.1)
+                    break
+                except sp.TimeoutExpired:
+                    if cancel_event is None or not cancel_event.is_set():
+                        continue
+                    process.terminate()
+                    try:
+                        _, stderr_bytes = process.communicate(timeout=2.0)
+                    except sp.TimeoutExpired:
+                        process.kill()
+                        _, stderr_bytes = process.communicate()
+                    raise PipelineCanceledError(
+                        "Обработка отменена пользователем"
+                    )
+        except BaseException:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=2.0)
+                except sp.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+            raise
 
-    def _make_silence(self, path: Path, duration_sec: float) -> Path:
+        if process.returncode:
+            stderr = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+            logger.error("ffmpeg error (code %d): %s", process.returncode, stderr)
+            raise RuntimeError(
+                f"Ошибка ffmpeg (код {process.returncode}): {stderr[:500]}"
+            )
+
+    def _make_silence(
+        self,
+        path: Path,
+        duration_sec: float,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> Path:
         """Создание WAV-файла с тишиной заданной длительности."""
         duration_ms = int(duration_sec * 1000)
         self._run_ffmpeg([
@@ -87,7 +132,7 @@ class AudioAssembler:
             "-t", str(duration_sec),
             "-acodec", "pcm_s16le",
             str(path),
-        ])
+        ], cancel_event=cancel_event)
         return path
 
     # ── public API ─────────────────────────────────────────────
@@ -96,6 +141,7 @@ class AudioAssembler:
         self,
         segments: List[Tuple[Path, float]],
         output_path: Path,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Path:
         """Склейка аудиофрагментов в главу.
 
@@ -120,9 +166,10 @@ class AudioAssembler:
             wav_files: List[Path] = []
 
             for idx, (audio_path, pause) in enumerate(segments):
+                self._check_canceled(cancel_event)
                 if pause > 0:
                     silence_path = tmp_root / f"silence_{idx}.wav"
-                    self._make_silence(silence_path, pause)
+                    self._make_silence(silence_path, pause, cancel_event)
                     wav_files.append(silence_path)
 
                 if not audio_path.exists():
@@ -137,7 +184,7 @@ class AudioAssembler:
                     "-ac", "1",
                     "-ar", str(self.sample_rate),
                     str(wav_segment),
-                ])
+                ], cancel_event=cancel_event)
                 wav_files.append(wav_segment)
 
             if not wav_files:
@@ -149,6 +196,7 @@ class AudioAssembler:
                 for p in wav_files:
                     f.write(f"file '{p.resolve()}'\n")
 
+            self._check_canceled(cancel_event)
             self._run_ffmpeg([
                 "-f", "concat",
                 "-safe", "0",
@@ -157,8 +205,9 @@ class AudioAssembler:
                 "-ac", "1",
                 "-ar", str(self.sample_rate),
                 "-y", str(output_path),
-            ])
+            ], cancel_event=cancel_event)
 
+        self._check_canceled(cancel_event)
         # Получаем длительность через ffprobe
         duration = self.get_audio_duration(output_path)
         logger.info("Глава сохранена: %s (%.1f сек)", output_path, duration)
@@ -170,6 +219,7 @@ class AudioAssembler:
         output_path: Path,
         chapter_pause: float = 1.5,
         progress_callback: Optional[Callable[[int, int], None]] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Path:
         """Склейка глав в финальную аудиокнигу.
 
@@ -194,9 +244,10 @@ class AudioAssembler:
             total = len(chapter_paths)
 
             for i, chapter_path in enumerate(chapter_paths):
+                self._check_canceled(cancel_event)
                 if i > 0 and chapter_pause > 0:
                     silence_path = tmp_root / f"pause_{i}.wav"
-                    self._make_silence(silence_path, chapter_pause)
+                    self._make_silence(silence_path, chapter_pause, cancel_event)
                     file_list_paths.append(silence_path)
 
                 if not chapter_path.exists():
@@ -219,6 +270,7 @@ class AudioAssembler:
 
             # Конвертируем всё в WAV (чтобы concat работал с одинаковым кодеком)
             merged_wav = tmp_root / "merged.wav"
+            self._check_canceled(cancel_event)
             self._run_ffmpeg([
                 "-f", "concat",
                 "-safe", "0",
@@ -227,17 +279,19 @@ class AudioAssembler:
                 "-ac", "1",
                 "-ar", str(self.sample_rate),
                 "-y", str(merged_wav),
-            ])
+            ], cancel_event=cancel_event)
 
             # Финальное кодирование в MP3
+            self._check_canceled(cancel_event)
             self._run_ffmpeg([
                 "-i", str(merged_wav),
                 "-codec:a", "libmp3lame",
                 "-b:a", "192k",
                 "-q:a", "0",
                 "-y", str(output_path),
-            ])
+            ], cancel_event=cancel_event)
 
+        self._check_canceled(cancel_event)
         duration_min = self.get_audio_duration(output_path) / 60
         logger.info(
             "Аудиокнига сохранена: %s (%.1f мин)",
