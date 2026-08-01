@@ -140,7 +140,7 @@ def build_pipeline_config(
     )
 
 
-class MinimalAudiobookGUI:
+class AudiobookGeneratorGUI:
     """Один экран: книга, язык, движок, голос, папка и запуск."""
 
     def __init__(self, root: tk.Tk, settings: Optional[Settings] = None):
@@ -155,7 +155,7 @@ class MinimalAudiobookGUI:
         self.cuda_visible_devices_was_set = "CUDA_VISIBLE_DEVICES" in os.environ
         self.initial_cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
 
-        self.root.title("Audiobook Generator — минимальный интерфейс")
+        self.root.title("Audiobook Generator")
         self.root.geometry("860x650")
         self.root.minsize(760, 580)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -618,7 +618,7 @@ class MinimalAudiobookGUI:
 
 def main() -> None:
     root = tk.Tk()
-    MinimalAudiobookGUI(root)
+    AudiobookGeneratorGUI(root)
     root.mainloop()
 
 
