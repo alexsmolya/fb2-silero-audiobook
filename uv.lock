@@ -134,64 +134,6 @@ wheels = [
 ]
 
 [[package]]
-name = "book-v2-audio"
-version = "0.2.0"
-source = { editable = "." }
-dependencies = [
-    { name = "click" },
-    { name = "cryptography" },
-    { name = "customtkinter" },
-    { name = "defusedxml" },
-    { name = "edge-tts" },
-    { name = "httpx" },
-    { name = "keyring" },
-    { name = "pillow" },
-    { name = "spacy" },
-    { name = "tomli-w" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pyinstaller" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-mock" },
-]
-silero = [
-    { name = "scipy" },
-    { name = "silero-tts" },
-    { name = "torch" },
-    { name = "torchaudio" },
-]
-supertonic = [
-    { name = "supertonic" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = "==8.4.2" },
-    { name = "cryptography", specifier = "==49.0.0" },
-    { name = "customtkinter", specifier = "==6.0.0" },
-    { name = "defusedxml", specifier = "==0.7.1" },
-    { name = "edge-tts", specifier = "==7.2.8" },
-    { name = "httpx", specifier = "==0.28.1" },
-    { name = "keyring", specifier = "==25.7.0" },
-    { name = "pillow", specifier = "==12.3.0" },
-    { name = "pyinstaller", marker = "extra == 'dev'", specifier = ">=6.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
-    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.12.0" },
-    { name = "scipy", marker = "extra == 'silero'", specifier = "==1.18.0" },
-    { name = "silero-tts", marker = "extra == 'silero'", specifier = "==0.0.5" },
-    { name = "spacy", specifier = "==3.8.14" },
-    { name = "supertonic", marker = "extra == 'supertonic'", specifier = ">=1.0.0" },
-    { name = "tomli-w", specifier = "==1.2.0" },
-    { name = "torch", marker = "extra == 'silero'", specifier = "==2.13.0" },
-    { name = "torchaudio", marker = "extra == 'silero'", specifier = "==2.11.0" },
-]
-provides-extras = ["supertonic", "silero", "dev"]
-
-[[package]]
 name = "catalogue"
 version = "2.0.10"
 source = { registry = "https://pypi.org/simple" }
@@ -460,6 +402,64 @@ sdist = { url = "https://files.pythonhosted.org/packages/3f/60/afbf548b43c78355e
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8c/2b/a8cb687b92a2690d2ad171f0c2fd1c8f18690363cca7618bab2bbe4cdf2b/edge_tts-7.2.8-py3-none-any.whl", hash = "sha256:361fe48ce7ef613adbe30f664e3765dd71029c6cb57427279eff8ad6df2eb211", size = 31026, upload-time = "2026-03-22T19:57:49.672Z" },
 ]
+
+[[package]]
+name = "fb2-silero-audiobook"
+version = "0.2.0"
+source = { editable = "." }
+dependencies = [
+    { name = "click" },
+    { name = "cryptography" },
+    { name = "customtkinter" },
+    { name = "defusedxml" },
+    { name = "edge-tts" },
+    { name = "httpx" },
+    { name = "keyring" },
+    { name = "pillow" },
+    { name = "spacy" },
+    { name = "tomli-w" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pyinstaller" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-mock" },
+]
+silero = [
+    { name = "scipy" },
+    { name = "silero-tts" },
+    { name = "torch" },
+    { name = "torchaudio" },
+]
+supertonic = [
+    { name = "supertonic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = "==8.4.2" },
+    { name = "cryptography", specifier = "==49.0.0" },
+    { name = "customtkinter", specifier = "==6.0.0" },
+    { name = "defusedxml", specifier = "==0.7.1" },
+    { name = "edge-tts", specifier = "==7.2.8" },
+    { name = "httpx", specifier = "==0.28.1" },
+    { name = "keyring", specifier = "==25.7.0" },
+    { name = "pillow", specifier = "==12.3.0" },
+    { name = "pyinstaller", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.12.0" },
+    { name = "scipy", marker = "extra == 'silero'", specifier = "==1.18.0" },
+    { name = "silero-tts", marker = "extra == 'silero'", specifier = "==0.0.5" },
+    { name = "spacy", specifier = "==3.8.14" },
+    { name = "supertonic", marker = "extra == 'supertonic'", specifier = ">=1.0.0" },
+    { name = "tomli-w", specifier = "==1.2.0" },
+    { name = "torch", marker = "extra == 'silero'", specifier = "==2.13.0" },
+    { name = "torchaudio", marker = "extra == 'silero'", specifier = "==2.11.0" },
+]
+provides-extras = ["supertonic", "silero", "dev"]
 
 [[package]]
 name = "filelock"

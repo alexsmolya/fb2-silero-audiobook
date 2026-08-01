@@ -52,10 +52,12 @@ temp_audio/
 
 # Downloaded model files and local caches
 silero_models/
+models/
 .cache/
 *.pt
 *.pth
 *.ckpt
+*.safetensors
 
 # --- Testing ---
 .coverage
@@ -71,6 +73,8 @@ settings.json
 settings.toml
 settings.yaml
 settings.yml
+pronunciations.toml
+.keys.enc
 *.local.json
 *.local.toml
 *.local.yaml

@@ -1,5 +1,8 @@
 # Локальные изменения Silero TTS
 
+> Историческая техническая заметка. Актуальные требования, установка и запуск
+> описаны в корневом `README.md`.
+
 ## Область изменений
 
 Основная доработка зафиксирована коммитом `4a8bb3e5cab915c27cfcdc7e3240c4cc09b66e40` (`Optimize Silero model loading and CUDA selection`).
@@ -51,14 +54,10 @@ LICENSE, README и сведения об авторстве проекта не 
 - Инструментированный счётчик конструкторов в smoke test: `v5_ru` — 1 загрузка, `v3_en` — 0 загрузок.
 - Проверено, что в коммит не попали `.venv`, модели, кэши, логи и тестовое аудио.
 
-## Git remotes
+## Исходный проект
 
-```text
-origin   https://github.com/alexsmolya/book-v2-audio-private.git
-upstream https://github.com/saabst/book-v2-audio.git
-```
-
-`main` отслеживает `origin/main`. `origin` — приватная модифицированная версия; `upstream` сохраняет ссылку на исходный проект.
+Локальная версия основана на
+[`saabst/book-v2-audio`](https://github.com/saabst/book-v2-audio).
 
 ## Установка и запуск
 
