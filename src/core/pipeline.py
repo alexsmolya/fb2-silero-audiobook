@@ -20,6 +20,7 @@ from .sentence_splitter import SentenceSplitter
 from .comment_manager import CommentManager, CommentConfig
 from .tts_manager import TTSManager, TTSConfig
 from .audio_assembler import AudioAssembler
+from .book_input import BookInputPreparer, PreparedBook, detect_book_format
 from .checkpoint_manager import CheckpointManager, Checkpoint
 from src.utils.exceptions import PipelineCanceledError
 
@@ -68,6 +69,7 @@ class Pipeline:
         self.comment_manager = CommentManager(config.comment_config)
         self.tts_manager = TTSManager(config.tts_config)
         self.audio_assembler = AudioAssembler()
+        self.book_input_preparer = BookInputPreparer()
         self.checkpoint_manager = CheckpointManager(config.work_dir)
 
         self._book: Optional[ParsedBook] = None
@@ -111,12 +113,33 @@ class Pipeline:
         ))
         self._chapter_audio_paths = []
         partial_output_path: Optional[Path] = None
+        prepared_book: Optional[PreparedBook] = None
 
         try:
+            # Шаг 0: подготовка поддерживаемого формата к существующему FB2-пути
+            source_format = detect_book_format(self.config.book_path)
+            if source_format != ".fb2":
+                self._report(
+                    progress_callback,
+                    f"Подготовка книги: "
+                    f"{source_format.removeprefix('.').upper()} → FB2 через Calibre…",
+                    0.0,
+                )
+            prepared_book = self.book_input_preparer.prepare(
+                self.config.book_path,
+                cancel_event=cancel_event,
+            )
+            if prepared_book.converted:
+                self._report(
+                    progress_callback,
+                    "Книга подготовлена, запуск обработки…",
+                    0.0,
+                )
+
             # Шаг 1: Парсинг FB2
             self._check_canceled(cancel_event)
             self._report(progress_callback, "Парсинг FB2-файла...", 0.0)
-            book = self.fb2_parser.parse(self.config.book_path)
+            book = self.fb2_parser.parse(prepared_book.fb2_path)
             self._book = book
             self._check_canceled(cancel_event)
 
@@ -318,6 +341,8 @@ class Pipeline:
             # Если дошли до return output_path в строке 245 — clear() уже вызван,
             # вызывать повторно безвредно (clear проверяет exists()).
             self.checkpoint_manager.clear()
+            if prepared_book is not None:
+                prepared_book.cleanup()
 
     async def _assemble_chapter_audio(
         self,

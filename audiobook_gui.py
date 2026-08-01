@@ -1,4 +1,4 @@
-"""Одностраничный GUI для создания аудиокниги из FB2."""
+"""Одностраничный GUI для создания аудиокниги из поддерживаемой книги."""
 
 from __future__ import annotations
 
@@ -16,6 +16,11 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import Optional
 
 from src.config.settings import Settings, load_settings, save_settings
+from src.core.book_input import (
+    SUPPORTED_BOOK_EXTENSIONS,
+    UnsupportedBookFormatError,
+    detect_book_format,
+)
 from src.core.comment_manager import CommentConfig
 from src.core.pipeline import AppConfig, Pipeline
 from src.core.tts_manager import BACKEND_NAMES, BACKEND_VOICES, TTSConfig
@@ -47,6 +52,27 @@ UI_FONT_NAMES = (
     "TkCaptionFont",
     "TkSmallCaptionFont",
     "TkIconFont",
+)
+
+
+def _file_patterns(*extensions: str) -> tuple[str, ...]:
+    patterns = []
+    for extension in extensions:
+        patterns.extend((f"*{extension}", f"*{extension.upper()}"))
+    return tuple(patterns)
+
+
+BOOK_FILETYPES = (
+    ("Поддерживаемые книги", _file_patterns(*sorted(SUPPORTED_BOOK_EXTENSIONS))),
+    ("FB2", _file_patterns(".fb2")),
+    ("EPUB", _file_patterns(".epub")),
+    ("MOBI / AZW", _file_patterns(".mobi", ".azw", ".azw3")),
+    (
+        "Текст и документы",
+        _file_patterns(".txt", ".txtz", ".docx", ".odt", ".rtf", ".fbz"),
+    ),
+    ("HTML", _file_patterns(".html", ".htm", ".htmlz")),
+    ("Все файлы", ("*.*",)),
 )
 
 
@@ -224,7 +250,7 @@ class AudiobookGeneratorGUI:
             font=(UI_FONT_FAMILY, 18, "bold"),
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 18))
 
-        ttk.Label(main, text="FB2-файл:").grid(
+        ttk.Label(main, text="Книга:").grid(
             row=1, column=0, sticky="w", padx=(0, 12), pady=6
         )
         ttk.Entry(main, textvariable=self.book_var).grid(
@@ -354,8 +380,8 @@ class AudiobookGeneratorGUI:
     def _choose_book(self) -> None:
         filename = filedialog.askopenfilename(
             parent=self.root,
-            title="Выберите FB2-файл",
-            filetypes=[("Книги FB2", "*.fb2"), ("Все файлы", "*.*")],
+            title="Выберите книгу",
+            filetypes=BOOK_FILETYPES,
         )
         if filename:
             self.book_var.set(filename)
@@ -406,14 +432,16 @@ class AudiobookGeneratorGUI:
         if not book_path.is_file():
             messagebox.showerror(
                 "Ошибка",
-                "Выберите существующий FB2-файл.",
+                "Выберите существующий файл книги.",
                 parent=self.root,
             )
             return None
-        if book_path.suffix.lower() != ".fb2":
+        try:
+            detect_book_format(book_path)
+        except UnsupportedBookFormatError as exc:
             messagebox.showerror(
                 "Ошибка",
-                "Выбранный файл должен иметь расширение .fb2.",
+                str(exc),
                 parent=self.root,
             )
             return None
