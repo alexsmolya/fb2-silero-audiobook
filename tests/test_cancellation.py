@@ -74,8 +74,13 @@ class FakeAssembler:
         output_path.write_bytes(b"chapter")
         return output_path
 
-    def assemble_book(self, chapter_paths, output_path, cancel_event=None):
+    def assemble_book(
+        self, chapter_paths, output_path, progress_callback=None,
+        cancel_event=None,
+    ):
         self.book_output = output_path
+        if progress_callback:
+            progress_callback(len(chapter_paths), len(chapter_paths))
         output_path.write_bytes(b"book")
         return output_path
 
@@ -202,7 +207,7 @@ class CancellationTests(unittest.TestCase):
 
         self.assertEqual(messages, ["Обработка отменена пользователем"])
         self.assertNotIn("Готово", " ".join(messages))
-        self.assertEqual(gui.progress["value"], 0)
+        self.assertEqual(gui.progress["value"], 73)
         self.assertFalse(gui.start_button.disabled)
         self.assertTrue(gui.cancel_button.disabled)
         self.assertTrue(gui.open_folder_button.disabled)
@@ -233,6 +238,7 @@ class CancellationTests(unittest.TestCase):
 
         self.assertIsNotNone(gui.worker)
         self.assertTrue(gui.worker.started)
+        self.assertEqual(gui.progress["value"], 0)
         self.assertTrue(gui.start_button.disabled)
         self.assertFalse(gui.cancel_button.disabled)
 
@@ -277,7 +283,7 @@ class CancellationTests(unittest.TestCase):
         gui._handle_event(("success", Path("late.mp3")))
 
         self.assertEqual(messages, ["Обработка отменена пользователем"])
-        self.assertEqual(gui.progress["value"], 0)
+        self.assertEqual(gui.progress["value"], 40)
 
     def test_close_waits_for_active_worker(self):
         gui = AudiobookGeneratorGUI.__new__(AudiobookGeneratorGUI)

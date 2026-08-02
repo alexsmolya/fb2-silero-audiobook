@@ -312,9 +312,14 @@ class BookInputTests(unittest.TestCase):
 
             pipeline._assemble_chapter_audio = assemble_chapter
 
-            def assemble_book(_chapters, output_path, cancel_event=None):
+            def assemble_book(
+                _chapters, output_path, progress_callback=None,
+                cancel_event=None,
+            ):
                 self.assertTrue(converted_path.is_file())
                 self.assertIsNotNone(cancel_event)
+                if progress_callback:
+                    progress_callback(len(_chapters), len(_chapters))
                 output_path.write_bytes(b"book")
                 return output_path
 

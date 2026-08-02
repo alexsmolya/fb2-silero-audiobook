@@ -184,6 +184,8 @@ class AudiobookGeneratorGUI:
         self.worker_outcome: Optional[tuple] = None
         self.terminal_handled = False
         self.cancel_requested = False
+        self._shown_progress = 0.0
+        self._last_logged_worker_status: Optional[str] = None
         self.close_after_worker = False
         self.cuda_visible_devices_was_set = "CUDA_VISIBLE_DEVICES" in os.environ
         self.initial_cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
@@ -525,7 +527,7 @@ class AudiobookGeneratorGUI:
         self.cancel_requested = False
         self.started_at = time.monotonic()
         self.last_result_path = None
-        self.progress["value"] = 0
+        self._reset_progress_state()
         self.start_button.configure(text="Идёт обработка…")
         self.start_button.state(["disabled"])
         self.cancel_button.configure(text="Прервать")
@@ -563,12 +565,11 @@ class AudiobookGeneratorGUI:
             voice: str,
             backend_name: str,
         ) -> None:
-            progress = 0.2 + (completed / max(total, 1)) * 0.2
             detail = (
                 f"Синтез {completed}/{total}: "
                 f"{text_preview[:90]} [{backend_name}, {voice}]"
             )
-            self.events.put(("progress", detail, progress))
+            self.events.put(("detail", detail))
 
         try:
             result = asyncio.run(
@@ -635,9 +636,15 @@ class AudiobookGeneratorGUI:
             self.terminal_handled = True
         if kind == "progress":
             _, status, progress = event
-            self.progress["value"] = max(0, min(100, progress * 100))
+            displayed = max(0.0, min(100.0, progress * 100))
+            displayed = max(getattr(self, "_shown_progress", 0.0), displayed)
+            self._shown_progress = displayed
+            self.progress["value"] = displayed
             if not status.startswith("Аудиокнига готова:"):
-                self._append_log(status)
+                self._append_worker_status(status)
+        elif kind == "detail":
+            _, detail = event
+            self._append_worker_status(detail)
         elif kind == "success":
             if self.cancel_requested:
                 self._finish_canceled()
@@ -647,6 +654,7 @@ class AudiobookGeneratorGUI:
             started_at = self.started_at or time.monotonic()
             elapsed = time.monotonic() - started_at
             self.progress["value"] = 100
+            self._shown_progress = 100.0
             self._append_log(
                 f"Готово за {format_duration(elapsed)} · "
                 f"{format_file_size(result_path)}: {result_path}"
@@ -679,7 +687,6 @@ class AudiobookGeneratorGUI:
 
     def _finish_canceled(self) -> None:
         self._append_log("Обработка отменена пользователем")
-        self.progress["value"] = 0
         self.started_at = None
         self.last_result_path = None
         self.start_button.configure(text="Создать аудиокнигу")
@@ -704,6 +711,19 @@ class AudiobookGeneratorGUI:
         self.log.insert("end", message.rstrip() + "\n")
         self.log.see("end")
         self.log.configure(state="disabled")
+
+    def _append_worker_status(self, message: str) -> None:
+        """Не повторять подряд одинаковый worker-status в текстовом логе."""
+        if message == getattr(self, "_last_logged_worker_status", None):
+            return
+        self._append_log(message)
+        self._last_logged_worker_status = message
+
+    def _reset_progress_state(self) -> None:
+        """Сбросить числовой прогресс и дедупликацию перед новым запуском."""
+        self.progress["value"] = 0
+        self._shown_progress = 0.0
+        self._last_logged_worker_status = None
 
     def _open_result_folder(self) -> None:
         """Открыть папку созданного файла, не блокируя главный поток GUI."""

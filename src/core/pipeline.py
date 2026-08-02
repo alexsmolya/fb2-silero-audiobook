@@ -21,6 +21,7 @@ from .comment_manager import CommentManager, CommentConfig
 from .tts_manager import TTSManager, TTSConfig
 from .audio_assembler import AudioAssembler
 from .book_input import BookInputPreparer, PreparedBook, detect_book_format
+from .book_progress import BookProgressTracker
 from .checkpoint_manager import CheckpointManager, Checkpoint
 from src.utils.exceptions import PipelineCanceledError
 
@@ -114,13 +115,18 @@ class Pipeline:
         self._chapter_audio_paths = []
         partial_output_path: Optional[Path] = None
         prepared_book: Optional[PreparedBook] = None
+        progress = BookProgressTracker(
+            lambda message, value: self._report(
+                progress_callback, message, value,
+            )
+        )
 
         try:
             # Шаг 0: подготовка поддерживаемого формата к существующему FB2-пути
             source_format = detect_book_format(self.config.book_path)
+            progress.publish("Подготовка входной книги...", 0.0)
             if source_format != ".fb2":
-                self._report(
-                    progress_callback,
+                progress.publish(
                     f"Подготовка книги: "
                     f"{source_format.removeprefix('.').upper()} → FB2 через Calibre…",
                     0.0,
@@ -130,15 +136,16 @@ class Pipeline:
                 cancel_event=cancel_event,
             )
             if prepared_book.converted:
-                self._report(
-                    progress_callback,
+                progress.publish(
                     "Книга подготовлена, запуск обработки…",
-                    0.0,
+                    progress.PREPARATION_END,
                 )
 
             # Шаг 1: Парсинг FB2
             self._check_canceled(cancel_event)
-            self._report(progress_callback, "Парсинг FB2-файла...", 0.0)
+            progress.publish(
+                "Парсинг FB2-файла...", progress.PREPARATION_END,
+            )
             book = self.fb2_parser.parse(prepared_book.fb2_path)
             self._book = book
             self._check_canceled(cancel_event)
@@ -150,11 +157,15 @@ class Pipeline:
             start_chapter = self.config.chapter_start or 0
             end_chapter = self.config.chapter_end or total_chapters
             chapters_to_process = book.chapters[start_chapter:end_chapter]
+            chapter_texts = [
+                " ".join(chapter.paragraphs)
+                for chapter in chapters_to_process
+            ]
+            progress.set_chapters(chapter_texts)
 
-            self._report(
-                progress_callback,
+            progress.publish(
                 f"Книга: '{book.metadata.title}', глав: {len(chapters_to_process)}",
-                0.05,
+                progress.PARSING_END,
             )
 
             # Проверка чекпоинта
@@ -172,11 +183,19 @@ class Pipeline:
                     self.checkpoint_manager.clear()
                     resume_from = 0
                 else:
-                    self._report(
-                        progress_callback,
-                        f"Восстановление с главы {resume_from + 1}...",
-                        0.05,
+                    completed_before_range = max(
+                        0, min(resume_from - start_chapter, len(chapters_to_process)),
                     )
+                    if completed_before_range:
+                        progress.publish(
+                            f"Восстановление с главы {resume_from + 1}...",
+                            progress.chapter_complete(completed_before_range - 1),
+                        )
+                    else:
+                        progress.publish(
+                            f"Восстановление с главы {resume_from + 1}...",
+                            progress.PARSING_END,
+                        )
 
             # Шаг 2-4: Обработка каждой главы
             for idx, chapter in enumerate(chapters_to_process):
@@ -189,13 +208,10 @@ class Pipeline:
                 if chapter_num < resume_from:
                     continue
 
-                chapter_progress = 0.1 + (idx / len(chapters_to_process)) * 0.8
-
                 # Разбиение на предложения
-                self._report(
-                    progress_callback,
+                progress.publish(
                     f"Глава {chapter_num + 1}/{total_chapters}: разбиение на предложения...",
-                    chapter_progress,
+                    progress.chapter_bounds(idx)[0],
                 )
                 sentences = self.sentence_splitter.split(
                     " ".join(chapter.paragraphs),
@@ -204,14 +220,17 @@ class Pipeline:
 
                 if not sentences:
                     logger.warning("Глава %d пуста, пропуск", chapter_num + 1)
+                    progress.publish(
+                        f"Глава {chapter_num + 1}/{total_chapters}: пуста, пропуск",
+                        progress.chapter_complete(idx),
+                    )
                     continue
 
                 # Генерация комментариев (если включены)
                 if self.config.comment_config.enabled:
-                    self._report(
-                        progress_callback,
+                    progress.publish(
                         f"Глава {chapter_num + 1}/{total_chapters}: генерация комментариев...",
-                        chapter_progress + 0.05,
+                        progress.chapter_preparation(idx),
                     )
                     comments = await self.comment_manager.generate_all(
                         sentences,
@@ -221,33 +240,56 @@ class Pipeline:
                     comments = [None] * len(sentences)
 
                 # Синтез речи
-                self._report(
-                    progress_callback,
+                progress.publish(
                     f"Глава {chapter_num + 1}/{total_chapters}: синтез речи...",
-                    chapter_progress + 0.2,
+                    progress.chapter_preparation(idx),
                 )
+
+                tts_segments: List[str] = []
+                for sentence_idx, sentence in enumerate(sentences):
+                    tts_segments.append(sentence)
+                    if (
+                        sentence_idx < len(comments)
+                        and comments[sentence_idx]
+                    ):
+                        tts_segments.append(comments[sentence_idx] or "")
+
+                def tts_progress(completed: int, total: int) -> None:
+                    progress.publish(
+                        f"Глава {chapter_num + 1}/{total_chapters}: "
+                        f"синтез речи {completed}/{total}...",
+                        progress.chapter_tts(
+                            idx, completed, total, tts_segments,
+                        ),
+                    )
 
                 chapter_dir = self._temp_dir / f"chapter_{chapter_num:04d}"
                 await self.tts_manager.synthesize_chapter(
                     text_segments=sentences,
                     comment_segments=comments,
                     chapter_dir=chapter_dir,
+                    progress_callback=tts_progress,
                     detail_callback=detail_callback,
                     cancel_event=cancel_event,
                 )
 
                 # Склейка аудиофрагментов главы
                 self._check_canceled(cancel_event)
-                self._report(
-                    progress_callback,
+                progress.publish(
                     f"Глава {chapter_num + 1}/{total_chapters}: склейка аудио...",
-                    chapter_progress + 0.4,
+                    progress.chapter_tts(
+                        idx, len(tts_segments), len(tts_segments), tts_segments,
+                    ),
                 )
 
                 chapter_audio = await self._assemble_chapter_audio(
                     sentences, comments, chapter_dir, chapter_num, cancel_event,
                 )
                 self._chapter_audio_paths.append(chapter_audio)
+                progress.publish(
+                    f"Глава {chapter_num + 1}/{total_chapters}: обработана",
+                    progress.chapter_complete(idx),
+                )
 
                 # Сохранение чекпоинта
                 config_dict = {
@@ -268,10 +310,9 @@ class Pipeline:
             # Шаг 5: Склейка книги
             if self._chapter_audio_paths:
                 self._check_canceled(cancel_event)
-                self._report(
-                    progress_callback,
+                progress.publish(
                     "Склейка всех глав в аудиокнигу...",
-                    0.95,
+                    progress.CHAPTERS_END,
                 )
 
                 output_filename = f"{book.metadata.title}.mp3"
@@ -290,22 +331,46 @@ class Pipeline:
                 )
                 os.close(fd)
                 partial_output_path = Path(partial_name)
+
+                def assembly_progress(completed: int, total: int) -> None:
+                    progress.publish(
+                        "Склейка всех глав в аудиокнигу...",
+                        progress.final_assembly(completed, total),
+                    )
+
                 self.audio_assembler.assemble_book(
                     self._chapter_audio_paths,
                     partial_output_path,
+                    progress_callback=assembly_progress,
                     cancel_event=cancel_event,
                 )
                 self._check_canceled(cancel_event)
+                if (
+                    not partial_output_path.is_file()
+                    or partial_output_path.stat().st_size <= 0
+                ):
+                    raise RuntimeError(
+                        "Финальная сборка не создала корректный MP3-файл"
+                    )
+                progress.publish(
+                    "Проверка готового MP3...",
+                    progress.FINAL_ASSEMBLY_END,
+                )
                 os.replace(partial_output_path, output_path)
                 partial_output_path = None
+                if not output_path.is_file() or output_path.stat().st_size <= 0:
+                    raise RuntimeError("Итоговый MP3-файл не найден после сборки")
+
+                # Ошибка очистки Calibre-временных данных ещё должна считаться
+                # ошибкой запуска, поэтому завершаем её до публикации 100%.
+                prepared_book.cleanup()
+                prepared_book = None
 
                 # Очистка чекпоинта
                 self.checkpoint_manager.clear()
 
-                self._report(
-                    progress_callback,
+                progress.complete(
                     f"Аудиокнига готова: {output_path}",
-                    1.0,
                 )
 
                 return output_path
@@ -320,20 +385,18 @@ class Pipeline:
                 try:
                     partial_output_path.unlink()
                 except OSError:
-                    self._report(
-                        progress_callback,
+                    progress.publish(
                         f"Не удалось удалить временный файл: {partial_output_path}",
-                        0.0,
+                        progress.last_value,
                     )
             # Очистка временных файлов
             if self._temp_dir and self._temp_dir.exists():
                 try:
                     self.audio_assembler.cleanup_temp_files(self._temp_dir)
                 except OSError:
-                    self._report(
-                        progress_callback,
+                    progress.publish(
                         f"Не удалось удалить временный каталог: {self._temp_dir}",
-                        0.0,
+                        progress.last_value,
                     )
 
             # Очищаем чекпоинт при любом прерывании (кроме успешного завершения):
