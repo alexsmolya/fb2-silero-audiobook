@@ -232,8 +232,11 @@ class CancellationTests(unittest.TestCase):
         with (
             patch("audiobook_gui.save_settings"),
             patch("audiobook_gui.Pipeline", return_value=MagicMock()),
+            patch("audiobook_gui.RunDiagnostics") as diagnostics_class,
             patch("audiobook_gui.threading.Thread", FakeThread),
         ):
+            diagnostics_class.return_value.available = False
+            diagnostics_class.return_value.warning = None
             gui._start()
 
         self.assertIsNotNone(gui.worker)

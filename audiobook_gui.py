@@ -23,6 +23,7 @@ from src.core.book_input import (
 )
 from src.core.comment_manager import CommentConfig
 from src.core.pipeline import AppConfig, Pipeline
+from src.core.run_diagnostics import RunDiagnostics
 from src.core.tts_manager import BACKEND_NAMES, BACKEND_VOICES, TTSConfig
 from src.utils.exceptions import PipelineCanceledError
 
@@ -519,7 +520,19 @@ class AudiobookGeneratorGUI:
             backend,
             voice,
         )
-        self.pipeline = Pipeline(config)
+        diagnostics = RunDiagnostics(
+            book_path,
+            {
+                "backend": backend,
+                "voice": voice,
+                "language": language,
+                "device": (
+                    "cuda" if backend == "silero" and self.use_gpu_var.get()
+                    else "cpu"
+                ),
+            },
+        )
+        self.pipeline = Pipeline(config, diagnostics=diagnostics)
         self.cancel_event = threading.Event()
         self.worker_done_event = threading.Event()
         self.worker_outcome = None
@@ -536,6 +549,7 @@ class AudiobookGeneratorGUI:
         self._append_log(
             f"Запуск: {book_path.name}; движок: {backend}; голос: {voice}"
         )
+        self._append_diagnostics_start(diagnostics)
 
         self.worker = threading.Thread(
             target=self._worker_entry,
@@ -664,6 +678,7 @@ class AudiobookGeneratorGUI:
             self.start_button.configure(text="Создать ещё одну")
             self.start_button.state(["!disabled"])
             self.open_folder_button.state(["!disabled"])
+            self._append_saved_diagnostics_path()
             self._finish_worker()
         elif kind == "canceled":
             self._finish_canceled()
@@ -676,6 +691,7 @@ class AudiobookGeneratorGUI:
             self.start_button.configure(text="Создать аудиокнигу")
             self.start_button.state(["!disabled"])
             self.open_folder_button.state(["disabled"])
+            self._append_saved_diagnostics_path()
             self._finish_worker()
         elif kind == "open_error":
             _, error = event
@@ -692,6 +708,7 @@ class AudiobookGeneratorGUI:
         self.start_button.configure(text="Создать аудиокнигу")
         self.start_button.state(["!disabled"])
         self.open_folder_button.state(["disabled"])
+        self._append_saved_diagnostics_path()
         self._finish_worker()
 
     def _finish_worker(self) -> None:
@@ -724,6 +741,33 @@ class AudiobookGeneratorGUI:
         self.progress["value"] = 0
         self._shown_progress = 0.0
         self._last_logged_worker_status = None
+        self._diagnostics_warning_shown = False
+
+    def _append_saved_diagnostics_path(self) -> None:
+        diagnostics = getattr(getattr(self, "pipeline", None), "diagnostics", None)
+        if diagnostics is None:
+            return
+        final_path = getattr(diagnostics, "final_path", None)
+        if final_path is not None and Path(final_path).is_file():
+            self._append_log(f"Журнал сохранён: {final_path}")
+        elif getattr(diagnostics, "warning", None):
+            self._append_diagnostics_warning(
+                diagnostics.warning, "обработка продолжена",
+            )
+
+    def _append_diagnostics_start(self, diagnostics) -> None:
+        if diagnostics.available:
+            self._append_log(f"Диагностический журнал: {diagnostics.part_path}")
+        elif diagnostics.warning:
+            self._append_diagnostics_warning(
+                diagnostics.warning, "обработка продолжится",
+            )
+
+    def _append_diagnostics_warning(self, warning: str, suffix: str) -> None:
+        if getattr(self, "_diagnostics_warning_shown", False):
+            return
+        self._append_log(f"Предупреждение: {warning}; {suffix}")
+        self._diagnostics_warning_shown = True
 
     def _open_result_folder(self) -> None:
         """Открыть папку созданного файла, не блокируя главный поток GUI."""

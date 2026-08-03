@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import shutil
 import subprocess as sp
@@ -51,6 +52,7 @@ class AudioAssembler:
         """
         self.sample_rate = sample_rate
         self._ffmpeg = self._find_ffmpeg()
+        self._audio_probe_warnings: set[str] = set()
 
     # ── helpers ────────────────────────────────────────────────
 
@@ -319,28 +321,91 @@ class AudioAssembler:
         Returns:
             Длительность в секундах.
         """
-        if not audio_path.exists():
-            return 0.0
+        info = self.get_audio_info(audio_path)
+        return float(info.get("duration_seconds") or 0.0)
 
+    def get_audio_info(self, audio_path: Path) -> dict:
+        """Получить длительность, bitrate и sample rate через общий ffprobe."""
+        empty = {
+            "duration_seconds": None,
+            "bitrate_bps": None,
+            "sample_rate": None,
+        }
+        if not audio_path.exists():
+            return empty
         ffprobe = shutil.which("ffprobe")
         if ffprobe is None:
-            logger.warning("ffprobe не найден, возвращаю 0")
-            return 0.0
-
+            self._warn_audio_probe_once("missing", "ffprobe не найден")
+            return empty
         try:
             result = sp.run(
                 [
-                    ffprobe,
-                    "-v", "quiet",
-                    "-print_format", "json",
-                    "-show_format",
-                    str(audio_path),
+                    ffprobe, "-v", "quiet", "-print_format", "json",
+                    "-show_format", "-show_streams", str(audio_path),
                 ],
                 capture_output=True,
                 check=True,
+                timeout=10.0,
             )
             data = json.loads(result.stdout)
-            return float(data["format"]["duration"])
-        except Exception as exc:
-            logger.warning("Не удалось получить длительность %s: %s", audio_path, exc)
-            return 0.0
+            audio_stream = next(
+                (
+                    stream for stream in data.get("streams", [])
+                    if stream.get("codec_type") == "audio"
+                ),
+                {},
+            )
+            format_data = data.get("format", {})
+            return {
+                "duration_seconds": _first_positive_number(
+                    format_data.get("duration"), audio_stream.get("duration"),
+                ),
+                "bitrate_bps": _first_positive_number(
+                    format_data.get("bit_rate"), audio_stream.get("bit_rate"),
+                ),
+                "sample_rate": _optional_number(audio_stream.get("sample_rate")),
+            }
+        except sp.TimeoutExpired:
+            self._warn_audio_probe_once(
+                "timeout", "ffprobe превысил лимит времени",
+            )
+            return empty
+        except OSError:
+            self._warn_audio_probe_once("missing", "ffprobe не найден")
+            return empty
+        except (
+            sp.CalledProcessError, json.JSONDecodeError,
+            AttributeError, TypeError, ValueError,
+        ) as exc:
+            self._warn_audio_probe_once(
+                type(exc).__name__, "ffprobe вернул некорректные данные",
+            )
+            return empty
+
+    def _warn_audio_probe_once(self, key: str, message: str) -> None:
+        warnings = getattr(self, "_audio_probe_warnings", None)
+        if warnings is None:
+            warnings = self._audio_probe_warnings = set()
+        if key not in warnings:
+            warnings.add(key)
+            logger.warning("%s", message)
+
+
+def _optional_number(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+        if not math.isfinite(number) or number <= 0:
+            return None
+        return int(number) if number.is_integer() else number
+    except (TypeError, ValueError):
+        return None
+
+
+def _first_positive_number(*values):
+    for value in values:
+        number = _optional_number(value)
+        if number is not None:
+            return number
+    return None

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import tempfile
@@ -63,7 +64,7 @@ class Pipeline:
         )
     """
 
-    def __init__(self, config: AppConfig):
+    def __init__(self, config: AppConfig, diagnostics=None):
         self.config = config
         self.fb2_parser = FB2Parser()
         self.sentence_splitter = SentenceSplitter()
@@ -72,6 +73,7 @@ class Pipeline:
         self.audio_assembler = AudioAssembler()
         self.book_input_preparer = BookInputPreparer()
         self.checkpoint_manager = CheckpointManager(config.work_dir)
+        self.diagnostics = diagnostics
 
         self._book: Optional[ParsedBook] = None
         self._temp_dir: Optional[Path] = None
@@ -104,17 +106,17 @@ class Pipeline:
         if cancel_event is None:
             cancel_event = self._cancel_event
 
-        self._check_canceled(cancel_event)
         self._active_cancel_event = cancel_event
-
-        self.config.work_dir.mkdir(parents=True, exist_ok=True)
-        self._temp_dir = Path(tempfile.mkdtemp(
-            prefix="audiobook-run-",
-            dir=self.config.work_dir,
-        ))
+        self._temp_dir = None
         self._chapter_audio_paths = []
         partial_output_path: Optional[Path] = None
         prepared_book: Optional[PreparedBook] = None
+        terminal_status = "error"
+        terminal_error: Optional[str] = None
+        result_path: Optional[Path] = None
+        primary_exception: Optional[BaseException] = None
+        primary_traceback = None
+        cleanup_exception: Optional[BaseException] = None
         progress = BookProgressTracker(
             lambda message, value: self._report(
                 progress_callback, message, value,
@@ -122,8 +124,30 @@ class Pipeline:
         )
 
         try:
+            if self.diagnostics is not None:
+                self.diagnostics.register_sensitive_paths(
+                    self.config.book_path,
+                    self.config.output_dir,
+                    self.config.work_dir,
+                )
+            self._check_canceled(cancel_event)
+            self.config.work_dir.mkdir(parents=True, exist_ok=True)
+            self._temp_dir = Path(tempfile.mkdtemp(
+                prefix="audiobook-run-",
+                dir=self.config.work_dir,
+            ))
+            if self.diagnostics is not None:
+                self.diagnostics.register_sensitive_paths(
+                    self._temp_dir,
+                )
+                try:
+                    self.diagnostics.start_sampler()
+                except Exception as exc:
+                    logger.warning("Не удалось запустить sampler диагностики: %s", exc)
+
             # Шаг 0: подготовка поддерживаемого формата к существующему FB2-пути
-            source_format = detect_book_format(self.config.book_path)
+            with self._diagnostic_stage("input_preparation"):
+                source_format = detect_book_format(self.config.book_path)
             progress.publish("Подготовка входной книги...", 0.0)
             if source_format != ".fb2":
                 progress.publish(
@@ -131,10 +155,20 @@ class Pipeline:
                     f"{source_format.removeprefix('.').upper()} → FB2 через Calibre…",
                     0.0,
                 )
-            prepared_book = self.book_input_preparer.prepare(
-                self.config.book_path,
-                cancel_event=cancel_event,
+            preparation_stage = (
+                "calibre_conversion" if source_format != ".fb2"
+                else "input_file_ready"
             )
+            with self._diagnostic_stage(
+                preparation_stage,
+                input_size_bytes=self._file_size(self.config.book_path),
+            ):
+                prepared_book = self.book_input_preparer.prepare(
+                    self.config.book_path,
+                    cancel_event=cancel_event,
+                )
+            if self.diagnostics is not None:
+                self.diagnostics.register_sensitive_paths(prepared_book.fb2_path)
             if prepared_book.converted:
                 progress.publish(
                     "Книга подготовлена, запуск обработки…",
@@ -146,7 +180,14 @@ class Pipeline:
             progress.publish(
                 "Парсинг FB2-файла...", progress.PREPARATION_END,
             )
-            book = self.fb2_parser.parse(prepared_book.fb2_path)
+            parsing_started = time.perf_counter()
+            with self._diagnostic_stage("fb2_parsing"):
+                book = self.fb2_parser.parse(prepared_book.fb2_path)
+            if self.diagnostics is not None:
+                self.diagnostics.book_parsed(
+                    book,
+                    time.perf_counter() - parsing_started,
+                )
             self._book = book
             self._check_canceled(cancel_event)
 
@@ -213,10 +254,14 @@ class Pipeline:
                     f"Глава {chapter_num + 1}/{total_chapters}: разбиение на предложения...",
                     progress.chapter_bounds(idx)[0],
                 )
-                sentences = self.sentence_splitter.split(
-                    " ".join(chapter.paragraphs),
-                    book.metadata.lang,
-                )
+                with self._diagnostic_stage(
+                    "sentence_splitting",
+                    chapter_index=chapter_num + 1,
+                ):
+                    sentences = self.sentence_splitter.split(
+                        " ".join(chapter.paragraphs),
+                        book.metadata.lang,
+                    )
 
                 if not sentences:
                     logger.warning("Глава %d пуста, пропуск", chapter_num + 1)
@@ -264,14 +309,29 @@ class Pipeline:
                     )
 
                 chapter_dir = self._temp_dir / f"chapter_{chapter_num:04d}"
-                await self.tts_manager.synthesize_chapter(
-                    text_segments=sentences,
-                    comment_segments=comments,
-                    chapter_dir=chapter_dir,
-                    progress_callback=tts_progress,
-                    detail_callback=detail_callback,
-                    cancel_event=cancel_event,
-                )
+                with self._diagnostic_stage(
+                    "chapter_synthesis",
+                    chapter_index=chapter_num + 1,
+                    items=len(tts_segments),
+                ):
+                    synthesis_kwargs = dict(
+                        text_segments=sentences,
+                        comment_segments=comments,
+                        chapter_dir=chapter_dir,
+                        progress_callback=tts_progress,
+                        detail_callback=detail_callback,
+                        cancel_event=cancel_event,
+                    )
+                    if self.diagnostics is not None:
+                        synthesis_kwargs.update(
+                            diagnostics=self.diagnostics,
+                            chapter_index=chapter_num + 1,
+                            language=book.metadata.lang,
+                            audio_probe=getattr(
+                                self.audio_assembler, "get_audio_info", None,
+                            ),
+                        )
+                    await self.tts_manager.synthesize_chapter(**synthesis_kwargs)
 
                 # Склейка аудиофрагментов главы
                 self._check_canceled(cancel_event)
@@ -282,9 +342,34 @@ class Pipeline:
                     ),
                 )
 
-                chapter_audio = await self._assemble_chapter_audio(
-                    sentences, comments, chapter_dir, chapter_num, cancel_event,
-                )
+                chapter_inputs = list(chapter_dir.glob("*.mp3"))
+                assembly_started = time.perf_counter()
+                with self._diagnostic_stage(
+                    "chapter_assembly",
+                    chapter_index=chapter_num + 1,
+                    items=len(chapter_inputs),
+                    input_size_bytes=sum(
+                        self._file_size(path) or 0 for path in chapter_inputs
+                    ),
+                ):
+                    chapter_audio = await self._assemble_chapter_audio(
+                        sentences, comments, chapter_dir, chapter_num, cancel_event,
+                    )
+                if self.diagnostics is not None:
+                    chapter_info = self._audio_info(chapter_audio)
+                    self.diagnostics.emit(
+                        "chapter_audio_assembled",
+                        chapter_index=chapter_num + 1,
+                        input_files=len(chapter_inputs),
+                        input_size_bytes=sum(
+                            self._file_size(path) or 0 for path in chapter_inputs
+                        ),
+                        duration_seconds=max(
+                            0.0, time.perf_counter() - assembly_started,
+                        ),
+                        output_size_bytes=self._file_size(chapter_audio),
+                        output_duration_seconds=chapter_info.get("duration_seconds"),
+                    )
                 self._chapter_audio_paths.append(chapter_audio)
                 progress.publish(
                     f"Глава {chapter_num + 1}/{total_chapters}: обработана",
@@ -338,28 +423,62 @@ class Pipeline:
                         progress.final_assembly(completed, total),
                     )
 
-                self.audio_assembler.assemble_book(
-                    self._chapter_audio_paths,
-                    partial_output_path,
-                    progress_callback=assembly_progress,
-                    cancel_event=cancel_event,
+                final_started = time.perf_counter()
+                with self._diagnostic_stage(
+                    "final_assembly",
+                    items=len(self._chapter_audio_paths),
+                    input_size_bytes=sum(
+                        self._file_size(path) or 0
+                        for path in self._chapter_audio_paths
+                    ),
+                ):
+                    self.audio_assembler.assemble_book(
+                        self._chapter_audio_paths,
+                        partial_output_path,
+                        progress_callback=assembly_progress,
+                        cancel_event=cancel_event,
+                    )
+                final_ffmpeg_seconds = max(
+                    0.0, time.perf_counter() - final_started,
                 )
                 self._check_canceled(cancel_event)
-                if (
-                    not partial_output_path.is_file()
-                    or partial_output_path.stat().st_size <= 0
-                ):
-                    raise RuntimeError(
-                        "Финальная сборка не создала корректный MP3-файл"
+                verification_started = time.perf_counter()
+                with self._diagnostic_stage("mp3_verification"):
+                    if (
+                        not partial_output_path.is_file()
+                        or partial_output_path.stat().st_size <= 0
+                    ):
+                        raise RuntimeError(
+                            "Финальная сборка не создала корректный MP3-файл"
+                        )
+                    progress.publish(
+                        "Проверка готового MP3...",
+                        progress.FINAL_ASSEMBLY_END,
                     )
-                progress.publish(
-                    "Проверка готового MP3...",
-                    progress.FINAL_ASSEMBLY_END,
-                )
-                os.replace(partial_output_path, output_path)
-                partial_output_path = None
-                if not output_path.is_file() or output_path.stat().st_size <= 0:
-                    raise RuntimeError("Итоговый MP3-файл не найден после сборки")
+                    os.replace(partial_output_path, output_path)
+                    partial_output_path = None
+                    if not output_path.is_file() or output_path.stat().st_size <= 0:
+                        raise RuntimeError("Итоговый MP3-файл не найден после сборки")
+                    final_info = self._audio_info(output_path)
+                if self.diagnostics is not None:
+                    self.diagnostics.set_mp3_result(
+                        output_path, final_info.get("duration_seconds"),
+                    )
+                    self.diagnostics.emit(
+                        "book_audio_assembled",
+                        input_chapters=len(self._chapter_audio_paths),
+                        input_size_bytes=sum(
+                            self._file_size(path) or 0
+                            for path in self._chapter_audio_paths
+                        ),
+                        ffmpeg_seconds=final_ffmpeg_seconds,
+                        output_duration_seconds=final_info.get("duration_seconds"),
+                        output_size_bytes=self._file_size(output_path),
+                        bitrate_bps=final_info.get("bitrate_bps"),
+                        verification_seconds=max(
+                            0.0, time.perf_counter() - verification_started,
+                        ),
+                    )
 
                 # Ошибка очистки Calibre-временных данных ещё должна считаться
                 # ошибкой запуска, поэтому завершаем её до публикации 100%.
@@ -369,43 +488,104 @@ class Pipeline:
                 # Очистка чекпоинта
                 self.checkpoint_manager.clear()
 
-                progress.complete(
-                    f"Аудиокнига готова: {output_path}",
-                )
-
-                return output_path
+                terminal_status = "success"
+                result_path = output_path
 
             else:
                 self._check_canceled(cancel_event)
                 raise ValueError("Не удалось создать аудиокнигу: нет обработанных глав")
 
+        except PipelineCanceledError as exc:
+            terminal_status = "canceled"
+            terminal_error = str(exc)
+            primary_exception = exc
+            primary_traceback = exc.__traceback__
+        except BaseException as exc:
+            terminal_status = "error"
+            terminal_error = str(exc)
+            primary_exception = exc
+            primary_traceback = exc.__traceback__
         finally:
             self._active_cancel_event = None
-            if partial_output_path is not None and partial_output_path.exists():
-                try:
-                    partial_output_path.unlink()
-                except OSError:
-                    progress.publish(
-                        f"Не удалось удалить временный файл: {partial_output_path}",
-                        progress.last_value,
-                    )
-            # Очистка временных файлов
-            if self._temp_dir and self._temp_dir.exists():
-                try:
-                    self.audio_assembler.cleanup_temp_files(self._temp_dir)
-                except OSError:
-                    progress.publish(
-                        f"Не удалось удалить временный каталог: {self._temp_dir}",
-                        progress.last_value,
-                    )
+            try:
+                with self._diagnostic_stage("temporary_cleanup"):
+                    cleanup_errors: List[BaseException] = []
 
-            # Очищаем чекпоинт при любом прерывании (кроме успешного завершения):
-            # временные файлы удалены, так что чекпоинт бесполезен.
-            # Если дошли до return output_path в строке 245 — clear() уже вызван,
-            # вызывать повторно безвредно (clear проверяет exists()).
-            self.checkpoint_manager.clear()
-            if prepared_book is not None:
-                prepared_book.cleanup()
+                    def attempt_cleanup(action, warning: str) -> None:
+                        try:
+                            action()
+                        except BaseException as exc:
+                            cleanup_errors.append(exc)
+                            progress.publish(warning, progress.last_value)
+
+                    if partial_output_path is not None and partial_output_path.exists():
+                        attempt_cleanup(
+                            partial_output_path.unlink,
+                            f"Не удалось удалить временный файл: {partial_output_path}",
+                        )
+                    if self._temp_dir and self._temp_dir.exists():
+                        attempt_cleanup(
+                            lambda: self.audio_assembler.cleanup_temp_files(self._temp_dir),
+                            f"Не удалось удалить временный каталог: {self._temp_dir}",
+                        )
+                    attempt_cleanup(
+                        self.checkpoint_manager.clear,
+                        "Не удалось очистить checkpoint",
+                    )
+                    if prepared_book is not None:
+                        attempt_cleanup(
+                            prepared_book.cleanup,
+                            "Не удалось очистить временные данные входной книги",
+                        )
+                    if cleanup_errors:
+                        raise cleanup_errors[0]
+            except BaseException as exc:
+                cleanup_exception = exc
+                if primary_exception is None:
+                    terminal_status = "error"
+                    terminal_error = str(exc)
+            finally:
+                if (
+                    primary_exception is None
+                    and cleanup_exception is None
+                    and result_path is not None
+                ):
+                    try:
+                        progress.complete(f"Аудиокнига готова: {result_path}")
+                    except BaseException as exc:
+                        primary_exception = exc
+                        primary_traceback = exc.__traceback__
+                        terminal_status = "error"
+                        terminal_error = str(exc)
+                if self.diagnostics is not None:
+                    try:
+                        self.diagnostics.finalize(
+                            terminal_status,
+                            error=terminal_error,
+                            output_path=result_path,
+                        )
+                    except BaseException as exc:
+                        has_pipeline_failure = (
+                            primary_exception is not None
+                            or cleanup_exception is not None
+                        )
+                        if not isinstance(exc, Exception) and not has_pipeline_failure:
+                            primary_exception = exc
+                            primary_traceback = exc.__traceback__
+                        else:
+                            logger.warning(
+                                "Ошибка финализации diagnostics (%s) не изменяет "
+                                "результат Pipeline",
+                                type(exc).__name__,
+                            )
+
+        if primary_exception is not None:
+            raise primary_exception.with_traceback(primary_traceback)
+        if cleanup_exception is not None:
+            raise cleanup_exception
+        if result_path is None:
+            raise RuntimeError("Pipeline завершился без результата")
+        return result_path
 
     async def _assemble_chapter_audio(
         self,
@@ -485,6 +665,28 @@ class Pipeline:
         if callback:
             callback(message, progress)
         logger.info("[%.0f%%] %s", progress * 100, message)
+
+    def _diagnostic_stage(self, stage: str, **fields):
+        if self.diagnostics is None:
+            return contextlib.nullcontext()
+        return self.diagnostics.stage(stage, **fields)
+
+    @staticmethod
+    def _file_size(path: Path) -> Optional[int]:
+        try:
+            return Path(path).stat().st_size
+        except OSError:
+            return None
+
+    def _audio_info(self, path: Path) -> dict:
+        probe = getattr(self.audio_assembler, "get_audio_info", None)
+        if probe is None:
+            return {
+                "duration_seconds": None,
+                "bitrate_bps": None,
+                "sample_rate": None,
+            }
+        return probe(path)
 
     @staticmethod
     def _check_canceled(cancel_event: threading.Event) -> None:

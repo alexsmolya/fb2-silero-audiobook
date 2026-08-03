@@ -213,6 +213,7 @@ class EdgeTTSManager(TTSBackend):
         chapter_dir: Path,
         progress_callback: Optional[Callable[[int, int], None]] = None,
         detail_callback: Optional[Callable[[int, int, str, str, str], None]] = None,
+        outcome_callback: Optional[Callable] = None,
     ) -> Path:
         """Синтез целой главы с комментариями.
 
@@ -240,6 +241,8 @@ class EdgeTTSManager(TTSBackend):
         for i, text in enumerate(text_segments):
             # Основной текст
             _report_segment(text, self.config.main_voice)
+            outcome = "success"
+            outcome_error = None
             try:
                 path = await self.synthesize_segment(
                     text, self.config.main_voice, self.config.main_speed,
@@ -253,8 +256,12 @@ class EdgeTTSManager(TTSBackend):
                 silence_path = chapter_dir / f"seg_{i * 2:06d}.mp3"
                 await self._generate_silence_mp3(silence_path, duration_sec=0.5)
                 path = silence_path
+                outcome = "fallback_silence"
+                outcome_error = str(e)
                 # Всё равно считаем выполненным для прогресса
             audio_paths.append(path)
+            if outcome_callback:
+                outcome_callback(completed + 1, total, outcome, outcome_error, path)
             completed += 1
             if progress_callback:
                 progress_callback(completed, total)
@@ -263,6 +270,8 @@ class EdgeTTSManager(TTSBackend):
             if i < len(comment_segments) and comment_segments[i]:
                 comment = comment_segments[i]
                 _report_segment(comment, self.config.comment_voice)
+                outcome = "success"
+                outcome_error = None
                 try:
                     path = await self.synthesize_segment(
                         comment, self.config.comment_voice,
@@ -277,7 +286,11 @@ class EdgeTTSManager(TTSBackend):
                     silence_path = chapter_dir / f"seg_{i * 2 + 1:06d}.mp3"
                     await self._generate_silence_mp3(silence_path, duration_sec=0.5)
                     path = silence_path
+                    outcome = "fallback_silence"
+                    outcome_error = str(e)
                 audio_paths.append(path)
+                if outcome_callback:
+                    outcome_callback(completed + 1, total, outcome, outcome_error, path)
                 completed += 1
                 if progress_callback:
                     progress_callback(completed, total)

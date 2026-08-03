@@ -51,6 +51,7 @@ class FakeTTS:
     async def synthesize_chapter(
         self, text_segments, comment_segments, chapter_dir,
         progress_callback=None, detail_callback=None, cancel_event=None,
+        **_kwargs,
     ):
         chapter_dir.mkdir(parents=True, exist_ok=True)
         segments = []

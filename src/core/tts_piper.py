@@ -489,6 +489,7 @@ class PiperTTSManager(TTSBackend):
         chapter_dir: Path,
         progress_callback: Optional[callable] = None,
         detail_callback: Optional[callable] = None,
+        outcome_callback: Optional[callable] = None,
     ) -> Path:
         """Синтез целой главы через Piper TTS.
 
@@ -524,8 +525,10 @@ class PiperTTSManager(TTSBackend):
         for i, text in enumerate(text_segments):
             # Основной текст — используем разрешённый Piper голос
             _report(text, self._main_voice)
+            outcome = "success"
+            outcome_error = None
             try:
-                await self.synthesize_segment(
+                audio_path = await self.synthesize_segment(
                     text, self._main_voice, self.config.main_speed, chapter_dir,
                     segment_index=file_idx,
                 )
@@ -538,6 +541,11 @@ class PiperTTSManager(TTSBackend):
                 )
                 silence_path = chapter_dir / f"seg_{file_idx:06d}.mp3"
                 await self._generate_silence_mp3(silence_path, duration_sec=0.5)
+                audio_path = silence_path
+                outcome = "fallback_silence"
+                outcome_error = str(e)
+            if outcome_callback:
+                outcome_callback(completed + 1, total, outcome, outcome_error, audio_path)
             file_idx += 1
             completed += 1
             if progress_callback:
@@ -547,8 +555,10 @@ class PiperTTSManager(TTSBackend):
             if i < len(comment_segments) and comment_segments[i]:
                 comment = comment_segments[i]
                 _report(comment, self._comment_voice)
+                outcome = "success"
+                outcome_error = None
                 try:
-                    await self.synthesize_segment(
+                    audio_path = await self.synthesize_segment(
                         comment, self._comment_voice,
                         self.config.comment_speed, chapter_dir,
                         segment_index=file_idx,
@@ -560,6 +570,11 @@ class PiperTTSManager(TTSBackend):
                     )
                     silence_path = chapter_dir / f"seg_{file_idx:06d}.mp3"
                     await self._generate_silence_mp3(silence_path, duration_sec=0.5)
+                    audio_path = silence_path
+                    outcome = "fallback_silence"
+                    outcome_error = str(e)
+                if outcome_callback:
+                    outcome_callback(completed + 1, total, outcome, outcome_error, audio_path)
                 file_idx += 1
                 completed += 1
                 if progress_callback:

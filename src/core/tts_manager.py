@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -94,6 +96,8 @@ class TTSManager:
     def __init__(self, config: TTSConfig):
         self.config = config
         self._backend: Optional[TTSBackend] = None
+        self._diagnostics_backend_reported = False
+        self._diagnostics_backend_started: Optional[float] = None
 
     async def _get_backend(self) -> TTSBackend:
         """Ленивая инициализация бэкенда."""
@@ -147,6 +151,10 @@ class TTSManager:
         progress_callback: Optional[Callable[[int, int], None]] = None,
         detail_callback: Optional[Callable[[int, int, str, str, str], None]] = None,
         cancel_event: Optional[threading.Event] = None,
+        diagnostics=None,
+        chapter_index: int = 0,
+        language: str = "",
+        audio_probe: Optional[Callable[[Path], Dict[str, Any]]] = None,
     ) -> Path:
         """Синтез целой главы с комментариями.
 
@@ -162,12 +170,123 @@ class TTSManager:
         """
         backend = await self._get_backend()
 
+        planned_segments = []
+        for index, text in enumerate(text_segments):
+            planned_segments.append((text, "main"))
+            if index < len(comment_segments) and comment_segments[index]:
+                planned_segments.append((comment_segments[index] or "", "comment"))
+        pending: Dict[str, Any] = {}
+        synthesis_started = time.perf_counter()
+        supports_detail_callback = False
+        legacy_files_before = (
+            set(chapter_dir.glob("*.mp3")) | set(chapter_dir.glob("*.wav"))
+        )
+        legacy_claimed_paths: set[Path] = set()
+
         def check_canceled() -> None:
             if cancel_event is not None and cancel_event.is_set():
                 raise PipelineCanceledError("Обработка отменена пользователем")
 
         def checked_progress(completed: int, total: int) -> None:
             # Backend вызывает этот callback сразу после атомарного TTS-вызова.
+            if diagnostics is not None:
+                started = pending.get("started", time.perf_counter())
+                before = pending.get("files_before", legacy_files_before)
+                files = set(chapter_dir.glob("*.mp3")) | set(chapter_dir.glob("*.wav"))
+                created = sorted(files - before - legacy_claimed_paths)
+                audio_path = pending.get("audio_path")
+                if audio_path is None:
+                    audio_path = created[-1] if created else (
+                        max(files, key=lambda p: p.stat().st_mtime_ns)
+                        if pending and files else None
+                    )
+                confirmed_audio = (
+                    audio_path is not None and Path(audio_path).is_file()
+                )
+                segment_outcome = pending.get("outcome", "success")
+                if segment_outcome == "success" and not confirmed_audio:
+                    pending.clear()
+                    if not self._diagnostics_backend_reported:
+                        self._diagnostics_backend_started = None
+                    check_canceled()
+                    if progress_callback:
+                        progress_callback(completed, total)
+                    return
+                info = None
+                if audio_path is not None and audio_probe is not None:
+                    try:
+                        info = audio_probe(audio_path)
+                    except Exception as exc:
+                        diagnostics.diagnostic_error("tts_audio_probe", exc)
+                planned_text, segment_type = (
+                    planned_segments[completed - 1]
+                    if 0 < completed <= len(planned_segments)
+                    else (pending.get("text", ""), pending.get("segment_type", "main"))
+                )
+                device = getattr(backend, "_device", None) or (
+                    "cuda" if self.config.backend == "silero" and os.environ.get("CUDA_VISIBLE_DEVICES", "") != "" else "cpu"
+                )
+                segment_error = pending.get("outcome_error")
+                if (
+                    not supports_detail_callback
+                    and completed == 1
+                    and not self._diagnostics_backend_reported
+                    and self._diagnostics_backend_started is None
+                ):
+                    self._diagnostics_backend_started = synthesis_started
+                if not supports_detail_callback and audio_path in created:
+                    legacy_claimed_paths.add(audio_path)
+                publish_initialization = (
+                    not self._diagnostics_backend_reported
+                    and self._diagnostics_backend_started is not None
+                )
+                if publish_initialization:
+                    diagnostics.emit(
+                        "stage_start",
+                        stage="tts_model_initialization",
+                        includes_first_segment=True,
+                    )
+                diagnostics.record_tts_segment(
+                    chapter_index=chapter_index,
+                    segment_index=completed,
+                    segment_total=total,
+                    segment_type=segment_type,
+                    backend=pending.get("backend", self.config.backend),
+                    voice=pending.get("voice", self.config.main_voice),
+                    language=language,
+                    device=str(device),
+                    characters=len(planned_text),
+                    wall_seconds=max(0.0, time.perf_counter() - started),
+                    audio_path=audio_path,
+                    audio_info=info,
+                    status=segment_outcome,
+                    error=segment_error,
+                    text_excerpt=(
+                        planned_text[:80]
+                        if segment_outcome != "success"
+                        else None
+                    ),
+                )
+                if publish_initialization:
+                    diagnostics.emit(
+                        "stage_end",
+                        stage="tts_model_initialization",
+                        status=(
+                            "success" if segment_outcome == "success"
+                            else "canceled" if segment_outcome == "canceled"
+                            else "error"
+                        ),
+                        outcome=segment_outcome,
+                        duration_seconds=max(
+                            0.0,
+                            time.perf_counter()
+                            - self._diagnostics_backend_started,
+                        ),
+                        includes_first_segment=True,
+                        error=segment_error,
+                    )
+                    self._diagnostics_backend_reported = True
+                pending.clear()
             check_canceled()
             if progress_callback:
                 progress_callback(completed, total)
@@ -181,27 +300,123 @@ class TTSManager:
         ) -> None:
             # Backend вызывает этот callback непосредственно перед фрагментом.
             check_canceled()
+            segment_type = (
+                planned_segments[completed - 1][1]
+                if 0 < completed <= len(planned_segments)
+                else "main"
+            )
+            pending.clear()
+            if (
+                diagnostics is not None
+                and not self._diagnostics_backend_reported
+                and self._diagnostics_backend_started is None
+            ):
+                self._diagnostics_backend_started = time.perf_counter()
+            pending.update({
+                "completed": completed,
+                "started": time.perf_counter(),
+                "files_before": set(chapter_dir.glob("*.mp3")) | set(chapter_dir.glob("*.wav")),
+                "text": text,
+                "segment_type": segment_type,
+                "voice": voice,
+                "backend": backend_name,
+            })
             if detail_callback:
                 detail_callback(completed, total, text, voice, backend_name)
 
+        def checked_outcome(
+            completed: int,
+            total: int,
+            outcome: str,
+            error: Optional[str],
+            audio_path: Optional[Path],
+        ) -> None:
+            if diagnostics is None:
+                return
+            pending["outcome"] = outcome
+            pending["outcome_error"] = error
+            pending["audio_path"] = audio_path
+
         check_canceled()
 
-        # EdgeTTSManager имеет detail_callback, PiperTTSManager — нет
+        def record_pending_failure(exc: BaseException) -> None:
+            if diagnostics is None or not pending:
+                return
+            failure_outcome = (
+                "canceled" if isinstance(exc, PipelineCanceledError) else "error"
+            )
+            completed = int(pending.get("completed", 1))
+            planned_text, segment_type = (
+                planned_segments[completed - 1]
+                if 0 < completed <= len(planned_segments)
+                else (pending.get("text", ""), pending.get("segment_type", "main"))
+            )
+            publish_initialization = (
+                not self._diagnostics_backend_reported
+                and self._diagnostics_backend_started is not None
+            )
+            if publish_initialization:
+                diagnostics.emit(
+                    "stage_start",
+                    stage="tts_model_initialization",
+                    includes_first_segment=True,
+                )
+            diagnostics.record_tts_segment(
+                chapter_index=chapter_index,
+                segment_index=completed,
+                segment_total=len(planned_segments),
+                segment_type=segment_type,
+                backend=pending.get("backend", self.config.backend),
+                voice=pending.get("voice", self.config.main_voice),
+                language=language,
+                device=str(getattr(backend, "_device", None) or "cpu"),
+                characters=len(planned_text),
+                wall_seconds=max(
+                    0.0,
+                    time.perf_counter()
+                    - pending.get("started", time.perf_counter()),
+                ),
+                audio_path=None,
+                status=failure_outcome,
+                error=str(exc)[:300],
+                text_excerpt=planned_text[:80],
+            )
+            if publish_initialization:
+                diagnostics.emit(
+                    "stage_end",
+                    stage="tts_model_initialization",
+                    status=failure_outcome,
+                    outcome=failure_outcome,
+                    duration_seconds=max(
+                        0.0,
+                        time.perf_counter()
+                        - self._diagnostics_backend_started,
+                    ),
+                    includes_first_segment=True,
+                    error=str(exc)[:300],
+                )
+                self._diagnostics_backend_reported = True
+            pending.clear()
+
         if hasattr(backend, 'synthesize_chapter'):
-            # Пробуем передать detail_callback, если бэкенд его поддерживает
             import inspect
             sig = inspect.signature(backend.synthesize_chapter)
+            callback_kwargs = {"progress_callback": checked_progress}
             if 'detail_callback' in sig.parameters:
+                supports_detail_callback = True
+                callback_kwargs["detail_callback"] = checked_detail
+            if diagnostics is not None and 'outcome_callback' in sig.parameters:
+                callback_kwargs["outcome_callback"] = checked_outcome
+            try:
                 return await backend.synthesize_chapter(
                     text_segments, comment_segments, chapter_dir,
-                    progress_callback=checked_progress,
-                    detail_callback=checked_detail,
+                    **callback_kwargs,
                 )
+            except BaseException as exc:
+                record_pending_failure(exc)
+                raise
 
-        return await backend.synthesize_chapter(
-            text_segments, comment_segments, chapter_dir,
-            progress_callback=checked_progress,
-        )
+        raise RuntimeError("TTS backend does not support chapter synthesis")
 
     async def get_available_voices(self, lang: str = "") -> List[Dict[str, Any]]:
         """Получение списка доступных голосов.
