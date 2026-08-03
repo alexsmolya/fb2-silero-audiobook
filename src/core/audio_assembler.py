@@ -147,9 +147,10 @@ class AudioAssembler:
     ) -> Path:
         """Склейка аудиофрагментов в главу.
 
-        Все входные файлы пре-декодируются в WAV (PCM s16le, 1ch, sample_rate Гц),
-        чтобы ffmpeg concat demuxer не путал кодеки (WAV-тишина + MP3-сегменты)
-        и не выдавал белый шум при попытке декодировать MP3-фреймы как PCM-данные.
+        Все входные файлы и паузы декодируются/создаются в одном filter graph
+        ffmpeg и склеиваются в WAV (PCM s16le, 1ch, sample_rate Гц). Это сохраняет
+        нормализацию кодеков без отдельного запуска ffmpeg для каждого сегмента
+        и каждой паузы.
 
         Args:
             segments: Список кортежей (путь_к_аудио, пауза_перед_в_сек).
@@ -163,46 +164,51 @@ class AudioAssembler:
 
         with tempfile.TemporaryDirectory(prefix="chapter_") as tmp_dir:
             tmp_root = Path(tmp_dir)
-            # Все файлы пре-декодируем в WAV с едиными параметрами,
-            # чтобы concat demuxer не получил на вход смесь разных кодеков
-            wav_files: List[Path] = []
+            input_args: List[str] = []
+            filters: List[str] = []
+            concat_inputs: List[str] = []
+            input_index = 0
 
             for idx, (audio_path, pause) in enumerate(segments):
                 self._check_canceled(cancel_event)
                 if pause > 0:
-                    silence_path = tmp_root / f"silence_{idx}.wav"
-                    self._make_silence(silence_path, pause, cancel_event)
-                    wav_files.append(silence_path)
+                    pause_label = f"pause_{idx}"
+                    filters.append(
+                        f"anullsrc=r={self.sample_rate}:cl=mono,"
+                        f"atrim=duration={pause},asetpts=PTS-STARTPTS"
+                        f"[{pause_label}]"
+                    )
+                    concat_inputs.append(f"[{pause_label}]")
 
                 if not audio_path.exists():
                     logger.warning("Файл не найден: %s", audio_path)
                     continue
 
-                # Пре-декодируем каждый сегмент в WAV с едиными параметрами
-                wav_segment = tmp_root / f"seg_{idx}.wav"
-                self._run_ffmpeg([
-                    "-y", "-i", str(audio_path),
-                    "-acodec", "pcm_s16le",
-                    "-ac", "1",
-                    "-ar", str(self.sample_rate),
-                    str(wav_segment),
-                ], cancel_event=cancel_event)
-                wav_files.append(wav_segment)
+                input_args.extend(["-i", str(audio_path)])
+                audio_label = f"segment_{idx}"
+                filters.append(
+                    f"[{input_index}:a:0]"
+                    f"aformat=sample_fmts=s16:sample_rates={self.sample_rate}:"
+                    f"channel_layouts=mono,asetpts=PTS-STARTPTS[{audio_label}]"
+                )
+                concat_inputs.append(f"[{audio_label}]")
+                input_index += 1
 
-            if not wav_files:
+            if not concat_inputs:
                 raise FileNotFoundError("Нет ни одного валидного аудиофайла для склейки главы")
 
-            # Создаём файл-список для ffmpeg concat demuxer
-            list_file = tmp_root / "filelist.txt"
-            with open(list_file, "w", encoding="utf-8") as f:
-                for p in wav_files:
-                    f.write(f"file '{p.resolve()}'\n")
+            filters.append(
+                "".join(concat_inputs)
+                + f"concat=n={len(concat_inputs)}:v=0:a=1[chapter]"
+            )
+            filter_script = tmp_root / "filter_complex.txt"
+            filter_script.write_text(";\n".join(filters), encoding="utf-8")
 
             self._check_canceled(cancel_event)
             self._run_ffmpeg([
-                "-f", "concat",
-                "-safe", "0",
-                "-i", str(list_file),
+                *input_args,
+                "-filter_complex_script", str(filter_script),
+                "-map", "[chapter]",
                 "-acodec", "pcm_s16le",
                 "-ac", "1",
                 "-ar", str(self.sample_rate),
