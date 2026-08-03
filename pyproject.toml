@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fb2-silero-audiobook"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local Russian FB2-to-MP3 audiobook generator powered by Silero TTS v5.5. Linux, CPU/CUDA, pronunciation dictionary and safe cancellation."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
