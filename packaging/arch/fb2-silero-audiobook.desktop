@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=FB2 Silero Audiobook
+Name[ru]=FB2 Silero Audiobook
+Comment=Create Russian MP3 audiobooks locally with Silero TTS
+Comment[ru]=Локальная озвучка русских книг в MP3 через Silero TTS
+Exec=fb2-silero-audiobook %F
+TryExec=fb2-silero-audiobook
+Icon=fb2-silero-audiobook
+Terminal=false
+Categories=AudioVideo;Audio;Utility;
+Keywords=audiobook;tts;fb2;silero;russian;speech;
+StartupNotify=true
