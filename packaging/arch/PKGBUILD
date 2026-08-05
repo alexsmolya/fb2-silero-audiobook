@@ -14,12 +14,14 @@ optdepends=(
   'nvidia-utils: NVIDIA runtime libraries for CUDA acceleration'
   'libnotify: desktop notification when the Python environment is not initialized'
 )
+install=fb2-silero-audiobook.install
 source=(
   "$pkgname::git+$url.git#tag=v$pkgver"
   'fb2-silero-audiobook'
   'fb2-silero-audiobook.desktop'
+  'fb2-silero-audiobook.install'
 )
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   cd "$srcdir/$pkgname"
