@@ -685,3 +685,61 @@ def test_tts_session_active_model_resolution(tmp_path: Path):
     mm = ModelManager(models_dir=models_dir)
     active_m = mm.get_active_model()
     assert active_m.model_id == "v5_6_ru"
+
+
+def test_smoke_test_timeout(tmp_path: Path):
+    """Сценарий 13: Превышение timeout при smoke-test возвращает статус timeout и не сменяет active."""
+    models_dir = tmp_path / "models"
+    create_mock_model_dir(models_dir, "v5_5_ru", active=True)
+
+    mm = ModelManager(models_dir=models_dir)
+    switcher = ModelSwitcher(model_manager=mm)
+
+    with patch("torch.package.PackageImporter", side_effect=TimeoutError("Worker timed out")):
+        res = switcher.run_smoke_test("v5_5_ru")
+        assert res.success is False
+        assert res.status == "timeout"
+        assert "Превышено допустимое время" in res.message
+
+
+def test_metadata_write_failure_rollback(tmp_path: Path):
+    """Сценарий 28: Ошибка записи metadata.json возвращает write_error и сохраняет старую модель активной."""
+    models_dir = tmp_path / "models"
+    create_mock_model_dir(models_dir, "v5_5_ru", active=True)
+    create_mock_model_dir(models_dir, "v5_6_ru", active=False)
+
+    mm = ModelManager(models_dir=models_dir)
+    switcher = ModelSwitcher(model_manager=mm)
+
+    mock_smoke = MagicMock()
+    mock_smoke.success = True
+
+    with patch.object(switcher, "run_smoke_test", return_value=mock_smoke):
+        # Смокируем ошибку при отмене/записи new metadata.json.tmp -> replace
+        with patch("pathlib.Path.replace", side_effect=OSError("Disk write error")):
+            res = switcher.activate_model("v5_6_ru", dry_run=False)
+            assert res.success is False
+            assert res.status == "write_error"
+            # Старая модель v5_5_ru остается активной
+            assert mm.get_active_model().model_id == "v5_5_ru"
+
+
+def test_state_write_failure_rollback(tmp_path: Path):
+    """Сценарий 29: Ошибка записи state.json откатывает metadata.json и сохраняет старую модель активной."""
+    models_dir = tmp_path / "models"
+    create_mock_model_dir(models_dir, "v5_5_ru", active=True)
+    create_mock_model_dir(models_dir, "v5_6_ru", active=False)
+
+    mm = ModelManager(models_dir=models_dir)
+    switcher = ModelSwitcher(model_manager=mm)
+
+    mock_smoke = MagicMock()
+    mock_smoke.success = True
+
+    with patch.object(switcher, "run_smoke_test", return_value=mock_smoke):
+        # state.json не записывается
+        with patch.object(switcher, "_write_state_atomic", return_value=False):
+            res = switcher.activate_model("v5_6_ru", dry_run=False)
+            assert res.success is False
+            assert res.status == "write_error"
+            assert mm.get_active_model().model_id == "v5_5_ru"

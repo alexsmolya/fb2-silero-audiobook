@@ -445,6 +445,20 @@ class ModelSwitcher:
                 message=msg,
             )
 
+        except TimeoutError as exc:
+            logger.warning("Превышен лимит времени (timeout) при smoke-test модели %s: %s", model_id, exc)
+            return SmokeTestResult(
+                success=False,
+                status="timeout",
+                model_id=model_id,
+                available_speakers=[],
+                tested_speakers=[],
+                missing_required_speakers=REQUIRED_RUSSIAN_SPEAKERS,
+                failed_speakers=REQUIRED_RUSSIAN_SPEAKERS,
+                speaker_results={},
+                load_time_sec=round(time.monotonic() - start_load, 3),
+                message=f"Превышено допустимое время проверки модели ({timeout} сек).",
+            )
         except Exception as exc:
             logger.warning("Ошибка загрузки модели %s для smoke-test: %s", model_id, exc)
             return SmokeTestResult(
@@ -600,7 +614,43 @@ class ModelSwitcher:
         # Обновляем единый файл состояния state.json
         state_ok = self._write_state_atomic(active_model_id=model_id, previous_model_id=current_active_id)
         if not state_ok:
-            logger.warning("state.json не записан, но metadata.json моделей обновлены.")
+            logger.error("Откат метаданных: не удалось атомарно записать state.json.")
+            # Откат metadata.json новой модели обратно в active=False
+            try:
+                if new_meta_file.is_file():
+                    with new_meta_file.open("r", encoding="utf-8") as f:
+                        new_m = json.load(f)
+                    new_m["active"] = False
+                    new_tmp = new_dir / "metadata.json.tmp"
+                    with new_tmp.open("w", encoding="utf-8") as f:
+                        json.dump(new_m, f, indent=2, ensure_ascii=False)
+                    new_tmp.replace(new_meta_file)
+            except Exception:
+                pass
+            # Восстановление active=True у старой модели
+            if active_model and active_model.path and not active_model.is_legacy:
+                try:
+                    old_dir = Path(active_model.path).parent
+                    old_meta_file = old_dir / "metadata.json"
+                    if old_meta_file.is_file():
+                        with old_meta_file.open("r", encoding="utf-8") as f:
+                            old_m = json.load(f)
+                        old_m["active"] = True
+                        old_tmp = old_dir / "metadata.json.tmp"
+                        with old_tmp.open("w", encoding="utf-8") as f:
+                            json.dump(old_m, f, indent=2, ensure_ascii=False)
+                        old_tmp.replace(old_meta_file)
+                except Exception:
+                    pass
+
+            return SwitchResult(
+                success=False,
+                status="write_error",
+                model_id=model_id,
+                previous_model_id=current_active_id,
+                active=False,
+                message="Не удалось обновить единый файл состояния state.json.",
+            )
 
         # Запись в журнал событий
         self.log_switch_event(

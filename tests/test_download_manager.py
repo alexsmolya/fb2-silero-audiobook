@@ -54,7 +54,9 @@ def test_validate_download_url():
     assert validate_download_url("http://models.silero.ai/models/tts/ru/v5_5_ru.pt")[0] is False  # HTTP не разрешен
     assert validate_download_url("file:///etc/passwd")[0] is False  # file:// не разрешен
     assert validate_download_url("https://localhost/model.pt")[0] is False  # localhost не разрешен
-    assert validate_download_url("https://192.168.1.1/model.pt")[0] is False  # Приватный IP не разрешен
+    assert validate_download_url("https://127.0.0.1/model.pt")[0] is False  # Loopback IP
+    assert validate_download_url("https://10.0.0.1/model.pt")[0] is False  # Private IP 10.x
+    assert validate_download_url("https://192.168.1.1/model.pt")[0] is False  # Private IP 192.168.x
     assert validate_download_url("https://user:pass@models.silero.ai/model.pt")[0] is False  # Логин/пароль
 
 
@@ -62,6 +64,8 @@ def test_extract_safe_filename():
     assert extract_safe_filename("https://models.silero.ai/models/tts/ru/v5_5_ru_ru.pt", "v5_5_ru") == "v5_5_ru_ru.pt"
     assert extract_safe_filename("https://models.silero.ai/models/tts/ru/v5_6_ru.pt", "v5_6_ru") == "v5_6_ru.pt"
     assert extract_safe_filename("https://models.silero.ai/models/tts/ru/../../etc/passwd", "v5_6_ru") == "v5_6_ru.pt"
+    assert extract_safe_filename("https://models.silero.ai/models/tts/ru/%2e%2e/%2e%2e/etc/passwd", "v5_6_ru") == "v5_6_ru.pt"
+    assert extract_safe_filename("https://models.silero.ai/models/tts/ru/..%5c..%5cetc/passwd", "v5_6_ru") == "v5_6_ru.pt"
     assert extract_safe_filename("https://models.silero.ai/some_dir/", "v5_6_ru") == "v5_6_ru.pt"
     assert extract_safe_filename("https://models.silero.ai/v5_6_ru.pt", "v5_6_ru", requested_filename="../unsafe.pt") == "unsafe.pt"
 
@@ -345,3 +349,36 @@ def test_progress_callback_error_handling(tmp_path: Path):
         # Скачивание должно завершиться с успехом несмотря на ошибку callback
         res = dl.download_model(req, progress_callback=buggy_callback)
         assert res.status == "success"
+
+
+def test_force_download_on_already_active_model(tmp_path: Path):
+    """Флаг --force при скачивании уже активной модели не меняет ее active статус."""
+    models_dir = tmp_path / "models"
+    mm = ModelManager(models_dir=models_dir)
+
+    target_dir = models_dir / "v5_5_ru"
+    target_dir.mkdir(parents=True)
+    target_file = target_dir / "v5_5_ru_ru.pt"
+    target_file.write_bytes(DUMMY_MODEL_DATA)
+    (target_dir / "metadata.json").write_text(
+        json.dumps({"model_id": "v5_5_ru", "active": True}), encoding="utf-8"
+    )
+
+    import hashlib
+    actual_sha = hashlib.sha256(DUMMY_MODEL_DATA).hexdigest()
+
+    dl = DownloadManager(model_manager=mm)
+    req = DownloadRequest(
+        model_id="v5_5_ru",
+        url=DUMMY_URL,
+        filename="v5_5_ru_ru.pt",
+        expected_size_bytes=len(DUMMY_MODEL_DATA),
+        remote_sha256=actual_sha,
+    )
+
+    res = dl.download_model(req)
+    assert res.status == "already_downloaded"
+
+    # Проверяем, что модель осталась активной
+    info = mm.get_model_info("v5_5_ru")
+    assert info.active is True
