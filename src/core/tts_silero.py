@@ -165,19 +165,57 @@ class SileroTTSManager(TTSBackend):
                 return
 
             try:
+                import os
+                import torch
                 from silero_tts.silero_tts import SileroTTS
+                from src.core.model_manager import ModelManager
+
+                mm = ModelManager()
+                active_meta = mm.get_active_model()
+                active_path = None
+                if active_meta and active_meta.valid and active_meta.path:
+                    p = Path(active_meta.path)
+                    if p.is_file():
+                        active_path = str(p)
 
                 logger.info(
-                    "Silero: загрузка русской модели %s (~150 МБ)...",
+                    "Silero: загрузка русской модели %s...",
                     SILERO_RU_MODEL_ID,
                 )
-                self._tts_ru = SileroTTS(
+                tts = SileroTTS(
                     model_id=SILERO_RU_MODEL_ID,
                     language="ru",
                     speaker=self._main_voice,
                     sample_rate=self._sample_rate,
                     device=self._get_device(),
                 )
+
+                if active_path and os.path.exists(active_path):
+                    try:
+                        logger.info(
+                            "Silero: подгрузка пользовательского бинарника модели из %s...",
+                            active_path,
+                        )
+                        from torch.package import PackageImporter
+
+                        device_name = self._get_device()
+                        if torch.cuda.is_available() and device_name in ("auto", "cuda"):
+                            torch_dev = torch.device("cuda", 0)
+                        else:
+                            torch_dev = torch.device(device_name if device_name != "auto" else "cpu")
+
+                        loaded_model = PackageImporter(active_path).load_pickle("tts_models", "model")
+                        loaded_model.to(torch_dev)
+                        tts.tts_model = loaded_model
+                        logger.info("Silero: пользовательская модель из %s успешно привязана", active_path)
+                    except Exception as exc:
+                        logger.warning(
+                            "Silero: не удалось загрузить пользовательскую модель из %s (%s). Используется базовый экземпляр.",
+                            active_path,
+                            exc,
+                        )
+
+                self._tts_ru = tts
                 logger.info(
                     "Silero: русская модель %s загружена",
                     SILERO_RU_MODEL_ID,
@@ -185,8 +223,7 @@ class SileroTTSManager(TTSBackend):
             except Exception as e:
                 raise RuntimeError(
                     f"Ошибка загрузки Silero TTS: {e}. "
-                    f"Убедитесь, что установлен PyTorch: "
-                    f"pip install torch torchaudio"
+                    f"Убедитесь, что модель установлена и PyTorch корректно функционирует."
                 ) from e
 
     async def _ensure_en_initialized(self) -> bool:
