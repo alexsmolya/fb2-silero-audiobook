@@ -417,10 +417,19 @@ class AudiobookGeneratorGUI:
 
     def _open_model_manager_dialog(self) -> None:
         """Открыть диалоговое окно управления моделями Silero TTS."""
+        if (
+            hasattr(self, "_model_manager_dialog")
+            and self._model_manager_dialog
+            and self._model_manager_dialog.winfo_exists()
+        ):
+            self._model_manager_dialog.lift()
+            self._model_manager_dialog.focus_force()
+            return
+
         from src.gui.model_manager_dialog import ModelManagerDialog
 
         voice_code = self.get_current_voice_code()
-        ModelManagerDialog(self.root, current_voice=voice_code)
+        self._model_manager_dialog = ModelManagerDialog(self.root, current_voice=voice_code)
 
     def _refresh_voices(self) -> None:
         backend = BACKENDS.get(self.backend_var.get(), "edge")
