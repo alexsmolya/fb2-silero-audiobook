@@ -16,6 +16,7 @@ from src.core.download_manager import (
     DownloadProgress,
     DownloadRequest,
     DownloadResult,
+    extract_safe_filename,
     validate_download_url,
 )
 from src.core.model_manager import ModelManager, ModelMetadata
@@ -57,6 +58,14 @@ def test_validate_download_url():
     assert validate_download_url("https://user:pass@models.silero.ai/model.pt")[0] is False  # Логин/пароль
 
 
+def test_extract_safe_filename():
+    assert extract_safe_filename("https://models.silero.ai/models/tts/ru/v5_5_ru_ru.pt", "v5_5_ru") == "v5_5_ru_ru.pt"
+    assert extract_safe_filename("https://models.silero.ai/models/tts/ru/v5_6_ru.pt", "v5_6_ru") == "v5_6_ru.pt"
+    assert extract_safe_filename("https://models.silero.ai/models/tts/ru/../../etc/passwd", "v5_6_ru") == "v5_6_ru.pt"
+    assert extract_safe_filename("https://models.silero.ai/some_dir/", "v5_6_ru") == "v5_6_ru.pt"
+    assert extract_safe_filename("https://models.silero.ai/v5_6_ru.pt", "v5_6_ru", requested_filename="../unsafe.pt") == "unsafe.pt"
+
+
 def test_dry_run_without_download(tmp_path: Path):
     mm = ModelManager(models_dir=tmp_path / "models")
     dl = DownloadManager(model_manager=mm)
@@ -70,7 +79,6 @@ def test_dry_run_without_download(tmp_path: Path):
     res = dl.download_model(req, dry_run=True)
     assert res.status == "ready"
     assert res.dry_run is True
-    # Убеждаемся, что файлы не вылились на диск
     target_file = tmp_path / "models" / "v5_6_ru" / "v5_6_ru.pt"
     assert not target_file.exists()
 
@@ -134,7 +142,6 @@ def test_progress_with_unknown_size(tmp_path: Path):
 
     progress_reports = []
     mock_client = make_mock_client(chunks=[DUMMY_MODEL_DATA])
-    # Убираем Content-Length из ответа
     mock_client.stream.return_value.__enter__.return_value.headers = {}
 
     with patch("httpx.Client", return_value=mock_client):

@@ -100,6 +100,26 @@ def main():
     parser_download.add_argument("--force", action="store_true", help="Принудительное скачивание, даже если локальная модель актуальна")
     parser_download.add_argument("--json", action="store_true", help="Вывод в JSON")
 
+    # Subcommand: activate
+    parser_activate = subparsers.add_parser("activate", help="Безопасная активация модели с предварительным smoke-test")
+    parser_activate.add_argument("model_id", nargs="?", default=None, help="Идентификатор модели (напр. v5_6_ru)")
+    parser_activate.add_argument("--dry-run", action="store_true", help="Режим проверки плана активации без выполнения переключения")
+    parser_activate.add_argument("--yes", action="store_true", help="Подтверждение реальной активации модели")
+    parser_activate.add_argument("--force", action="store_true", help="Принудительная активация")
+    parser_activate.add_argument("--json", action="store_true", help="Вывод в JSON")
+
+    # Subcommand: rollback
+    parser_rollback = subparsers.add_parser("rollback", help="Откат к предыдущей рабочей модели")
+    parser_rollback.add_argument("--dry-run", action="store_true", help="Режим проверки плана отката без выполнения переключения")
+    parser_rollback.add_argument("--yes", action="store_true", help="Подтверждение реального отката модели")
+    parser_rollback.add_argument("--json", action="store_true", help="Вывод в JSON")
+
+    # Subcommand: test
+    parser_test = subparsers.add_parser("test", help="Изолированный smoke-test модели синтеза речи")
+    parser_test.add_argument("model_id", nargs="?", default="v5_5_ru", help="Идентификатор модели для тестирования (напр. v5_5_ru)")
+    parser_test.add_argument("--voice", default="eugene", help="Голос для тестирования")
+    parser_test.add_argument("--json", action="store_true", help="Вывод в JSON")
+
     args, unknown = parser.parse_known_args()
 
     # Проверяем флаги --json, --dry-run, --yes, --force
@@ -246,6 +266,88 @@ def main():
 
             if res.status not in ("success", "already_downloaded"):
                 sys.exit(1)
+
+    elif cmd == "activate":
+        from src.core.model_switcher import ModelSwitcher
+
+        model_id = getattr(args, "model_id", None)
+        if not model_id:
+            print("Ошибка: укажите model_id для активации (напр. python main.py models activate v5_6_ru)", file=sys.stderr)
+            sys.exit(1)
+
+        switcher = ModelSwitcher(model_manager=mm)
+        perform_dry_run = is_dry_run or (not is_yes)
+        res = switcher.activate_model(model_id, dry_run=perform_dry_run, force=is_force)
+
+        if is_json:
+            print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            mode_tag = " (Dry Run)" if perform_dry_run else ""
+            print(f"План активации модели {model_id}{mode_tag}:")
+            print("---------------------------------------")
+            print(f"Статус:                {res.status.upper()}")
+            print(f"Текущая модель:        {res.previous_model_id or 'N/A'}")
+            print(f"Целевая модель:        {res.model_id or 'N/A'}")
+            print(f"Путь к файлу:          {res.installed_path or 'N/A'}")
+            if res.smoke_test:
+                print(f"Smoke-test:            {'УСПЕШНО' if res.smoke_test.success else 'ОШИБКА'}")
+                print(f"  Голос:               {res.smoke_test.voice}")
+                print(f"  Длительность аудио:  {res.smoke_test.audio_duration_sec} сек")
+            print(f"Сообщение:             {res.message}")
+            if perform_dry_run and not is_dry_run:
+                print("")
+                print("Режим проверки. Переключение НЕ выполнено. Для активации передайте флаг --yes.")
+
+        if not res.success:
+            sys.exit(1)
+
+    elif cmd == "rollback":
+        from src.core.model_switcher import ModelSwitcher
+
+        switcher = ModelSwitcher(model_manager=mm)
+        perform_dry_run = is_dry_run or (not is_yes)
+        res = switcher.rollback_active_model(dry_run=perform_dry_run)
+
+        if is_json:
+            print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            mode_tag = " (Dry Run)" if perform_dry_run else ""
+            print(f"Откат к предыдущей модели{mode_tag}:")
+            print("---------------------------------------")
+            print(f"Статус:                {res.status.upper()}")
+            print(f"Текущая модель:        {res.previous_model_id or 'N/A'}")
+            print(f"Восстанавливаемая:     {res.restored_model_id or 'N/A'}")
+            print(f"Сообщение:             {res.message}")
+            if perform_dry_run and not is_dry_run:
+                print("")
+                print("Режим проверки. Откат НЕ выполнен. Для выполнения отката передайте флаг --yes.")
+
+        if not res.success:
+            sys.exit(1)
+
+    elif cmd == "test":
+        from src.core.model_switcher import ModelSwitcher
+
+        model_id = getattr(args, "model_id", "v5_5_ru")
+        voice = getattr(args, "voice", "eugene")
+        switcher = ModelSwitcher(model_manager=mm)
+        res = switcher.run_smoke_test(model_id=model_id, voice=voice)
+
+        if is_json:
+            print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            print(f"Smoke-test модели {model_id}:")
+            print("---------------------------------------")
+            print(f"Результат:             {'УСПЕШНО' if res.success else 'ОШИБКА (' + res.status + ')'}")
+            print(f"Голос:                 {res.voice or 'N/A'}")
+            print(f"Sample Rate:           {res.sample_rate or 'N/A'} Гц")
+            print(f"Длительность аудио:    {res.audio_duration_sec} сек")
+            print(f"Время загрузки:        {res.load_time_sec} сек")
+            print(f"Время синтеза:         {res.synth_time_sec} сек")
+            print(f"Сообщение:             {res.message}")
+
+        if not res.success:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

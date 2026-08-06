@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import ipaddress
 import json
 import logging
@@ -31,12 +32,20 @@ from src.core.model_manager import ModelManager, ModelMetadata
 logger = logging.getLogger(__name__)
 
 ALLOWED_SCHEMES = {"https"}
-ALLOWED_HOSTNAMES = {
+
+# Доверенные хосты для скачивания бинарных файлов моделей (.pt)
+PACKAGE_ALLOWED_HOSTNAMES = {
     "models.silero.ai",
+}
+
+# Доверенные хосты для скачивания официального манифеста (models.yml)
+MANIFEST_ALLOWED_HOSTNAMES = {
     "raw.githubusercontent.com",
     "github.com",
     "objects.githubusercontent.com",
+    "models.silero.ai",
 }
+
 CHUNK_SIZE = 128 * 1024  # 128 KiB
 DEFAULT_CONNECT_TIMEOUT = 3.0
 DEFAULT_READ_TIMEOUT = 10.0
@@ -48,6 +57,7 @@ class DownloadRequest:
 
     model_id: str
     url: str
+    filename: Optional[str] = None
     expected_size_bytes: Optional[int] = None
     remote_etag: Optional[str] = None
     remote_last_modified: Optional[str] = None
@@ -93,6 +103,29 @@ class DownloadResult:
         return asdict(self)
 
 
+def extract_safe_filename(url: str, model_id: str, requested_filename: Optional[str] = None) -> str:
+    """Извлечь имя файла из URL или параметров и защитить от path traversal."""
+    if requested_filename and isinstance(requested_filename, str):
+        raw_name = requested_filename
+    elif url and isinstance(url, str):
+        parsed = urlparse(url)
+        url_path = parsed.path.rstrip("/")
+        basename = os.path.basename(url_path)
+        if basename and (basename.endswith(".pt") or basename.endswith(".jit")):
+            raw_name = basename
+        else:
+            raw_name = f"{model_id}.pt"
+    else:
+        raw_name = f"{model_id}.pt"
+
+    # Очистка от разделителей путей и path traversal (.. / \\)
+    clean_name = os.path.basename(raw_name.replace("\\", "/")).strip()
+    if not clean_name or clean_name in (".", "..") or ".." in clean_name:
+        clean_name = f"{model_id}.pt"
+
+    return clean_name
+
+
 def validate_download_url(url: str, allowed_hostnames: Optional[set[str]] = None) -> Tuple[bool, str]:
     """Проверка URL на безопасность и SSRF уязвимости."""
     if not url or not isinstance(url, str):
@@ -124,8 +157,8 @@ def validate_download_url(url: str, allowed_hostnames: Optional[set[str]] = None
         if host in ("localhost", "localhost.localdomain") or host.endswith(".local"):
             return False, f"Запрещен скачивание с локального хоста '{host}'."
 
-    # Проверка списка доверенных хостов (если передан)
-    hosts_to_check = allowed_hostnames or ALLOWED_HOSTNAMES
+    # Проверка списка доверенных хостов (по умолчанию PACKAGE_ALLOWED_HOSTNAMES для бинарных пакетов)
+    hosts_to_check = allowed_hostnames if allowed_hostnames is not None else PACKAGE_ALLOWED_HOSTNAMES
     if hosts_to_check:
         matched = False
         for allowed in hosts_to_check:
@@ -165,8 +198,8 @@ class DownloadManager:
         dry_run: bool = False,
     ) -> DownloadResult:
         """Потоковая загрузка модели в пользовательское хранилище."""
-        # 1. Валидация URL и SSRF защита
-        valid_url, url_err = validate_download_url(request.url)
+        # 1. Валидация URL и SSRF защита (проверка хоста по PACKAGE_ALLOWED_HOSTNAMES)
+        valid_url, url_err = validate_download_url(request.url, allowed_hostnames=PACKAGE_ALLOWED_HOSTNAMES)
         if not valid_url:
             return DownloadResult(
                 status="ssrf_blocked",
@@ -176,11 +209,32 @@ class DownloadManager:
                 dry_run=dry_run,
             )
 
-        # 2. Определение целевого пути и проверка конфликта
+        # 2. Определение целевого пути и безопасного имени файла
+        target_filename = extract_safe_filename(request.url, request.model_id, request.filename)
         models_dir = request.destination_root or self.model_manager.get_models_dir()
         target_dir = models_dir / request.model_id
-        target_filename = f"{request.model_id}.pt"
         target_file = target_dir / target_filename
+
+        # Защита от path traversal
+        try:
+            resolved_target = target_file.resolve()
+            resolved_models_dir = models_dir.resolve()
+            if not str(resolved_target).startswith(str(resolved_models_dir)):
+                return DownloadResult(
+                    status="validation_error",
+                    model_id=request.model_id,
+                    url=request.url,
+                    message="Опасный путь к файлу (Path Traversal запрещен).",
+                    dry_run=dry_run,
+                )
+        except Exception as exc:
+            return DownloadResult(
+                status="validation_error",
+                model_id=request.model_id,
+                url=request.url,
+                message=f"Ошибка валидации пути к файлу: {exc}",
+                dry_run=dry_run,
+            )
 
         # Если целевой файл уже существует — проверяем идентичность
         if target_file.is_file():
@@ -256,8 +310,6 @@ class DownloadManager:
             pool=self.read_timeout,
         )
 
-        import hashlib
-
         hasher = hashlib.sha256()
         downloaded_bytes = 0
         start_time = time.monotonic()
@@ -267,7 +319,7 @@ class DownloadManager:
                 with client.stream("GET", request.url) as response:
                     # Повторная валидация после возможного редиректа
                     final_url = str(response.url)
-                    valid_final, final_err = validate_download_url(final_url)
+                    valid_final, final_err = validate_download_url(final_url, allowed_hostnames=PACKAGE_ALLOWED_HOSTNAMES)
                     if not valid_final:
                         self._safe_remove(temp_file)
                         return DownloadResult(
@@ -287,7 +339,6 @@ class DownloadManager:
                             message=f"Сервер вернул ошибку HTTP {response.status_code}.",
                         )
 
-                    # Определяем точный размер из заголовка, если был не известен
                     total_bytes = request.expected_size_bytes
                     if total_bytes is None and "Content-Length" in response.headers:
                         try:
@@ -367,7 +418,7 @@ class DownloadManager:
                 message=f"Критическая ошибка загрузки: {exc}",
             )
 
-        # 7. Проверка целостности загруженного файла
+        # 7. Проверка целостности скачанного файла
         calculated_sha256 = hasher.hexdigest().lower()
 
         # Валидация размера

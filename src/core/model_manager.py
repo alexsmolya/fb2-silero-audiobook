@@ -242,13 +242,28 @@ class ModelManager:
                 if legacy.model_id not in user_model_ids:
                     models.append(legacy)
 
-        # Если ни одна модель не помечена как active, но есть хотя бы одна валидная — первая считается активной
-        has_active = any(m.active for m in models if m.valid)
-        if not has_active:
+        # Чтение единого файла состояния state.json
+        state_file = user_dir / "state.json"
+        state_active_id = None
+        if state_file.is_file():
+            try:
+                with state_file.open("r", encoding="utf-8") as f:
+                    st_data = json.load(f)
+                    state_active_id = st_data.get("active_model_id")
+            except Exception:
+                pass
+
+        if state_active_id and any(m.model_id == state_active_id and m.valid for m in models):
             for m in models:
-                if m.valid:
-                    m.active = True
-                    break
+                m.active = (m.model_id == state_active_id and m.valid)
+        else:
+            # Если state.json отсутствует или указывал невалидную модель:
+            has_active = any(m.active for m in models if m.valid)
+            if not has_active:
+                for m in models:
+                    if m.valid:
+                        m.active = True
+                        break
 
         return models
 
