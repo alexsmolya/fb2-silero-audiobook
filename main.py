@@ -20,6 +20,13 @@ from src.ui.app import AudiobookApp
 
 def main():
     """Главная функция запуска приложения."""
+    if len(sys.argv) > 1 and sys.argv[1] in ("model-info", "--model-info"):
+        from tools.model_info import main as model_info_main
+
+        sys.argv.pop(1)
+        model_info_main()
+        return
+
     # Настройка логирования
     log_dir = Path.home() / ".audiobook-generator"
     log_file = log_dir / "audiobook-generator.log"
