@@ -60,9 +60,23 @@ def find_silero_model_path(
 ) -> Optional[Path]:
     """Программно определить путь к файлу модели Silero TTS.
 
-    Поиск выполняется по логическим каталогам (установленный silero-tts,
-    torch hub cache) без использования жёстко завязанных пользовательских путей.
+    Поиск выполняется по логическим каталогам (пользовательское хранилище ModelManager,
+    установленный silero-tts, torch hub cache) без жестко завязанных путей.
     """
+    # 0. Проверяем активную модель в пользовательском хранилище ModelManager
+    try:
+        from src.core.model_manager import ModelManager
+
+        mm = ModelManager()
+        user_models = mm.list_local_models(include_legacy=False)
+        for m in user_models:
+            if m.model_id == model_id and m.active and m.valid and m.path:
+                p = Path(m.path)
+                if p.is_file():
+                    return p.resolve()
+    except Exception as e:
+        logger.debug("Не удалось получить активную модель из ModelManager: %s", e)
+
     candidates: list[Path] = []
 
     # 1. Пакет silero_tts (silero_models/)

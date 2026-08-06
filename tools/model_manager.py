@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CLI для управления и просмотра локального хранилища моделей Silero TTS (ModelManager).
+CLI для управления, просмотра и миграции локальных моделей Silero TTS (ModelManager & ModelMigrator).
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from src.core.model_manager import ModelManager, ModelMetadata
+from src.core.model_migrator import MigrationResult, ModelMigrator
 
 
 def format_model_entry(m: ModelMetadata) -> str:
@@ -45,6 +46,22 @@ def format_models_list(models: list[ModelMetadata]) -> str:
     return header + "\n\n".join(entries)
 
 
+def format_migration_result(res: MigrationResult) -> str:
+    """Форматирование результата миграции в текстовый вид."""
+    mode_str = " (Dry Run)" if res.dry_run else ""
+    lines = [
+        f"Silero Model Migration{mode_str}:",
+        "",
+        f"Status: {res.status.upper() if res.success else 'FAILED (' + res.status + ')'}",
+        f"Source path: {res.source_path or 'N/A'}",
+        f"Target path: {res.target_path or 'N/A'}",
+        f"Size: {res.size_formatted or res.size_bytes or 'N/A'}",
+        f"SHA256: {res.sha256 or 'N/A'}",
+        f"Message: {res.message}",
+    ]
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Управление и просмотр локальных моделей Silero TTS"
@@ -69,11 +86,19 @@ def main():
     parser_info.add_argument("model_id", help="Идентификатор модели (напр. v5_5_ru)")
     parser_info.add_argument("--json", action="store_true", help="Вывод в JSON")
 
+    # Subcommand: migrate
+    parser_migrate = subparsers.add_parser("migrate", help="Миграция legacy-модели из .venv в пользовательское хранилище")
+    parser_migrate.add_argument("--dry-run", action="store_true", help="Режим проверки без копирования файлов")
+    parser_migrate.add_argument("--model-id", default="v5_5_ru", help="Идентификатор модели (по умолчанию v5_5_ru)")
+    parser_migrate.add_argument("--json", action="store_true", help="Вывод в JSON")
+
     args, unknown = parser.parse_known_args()
-    is_json = args.json or any(getattr(args, "json", False) for _ in [1])
+
+    # Проверяем флаги --json и --dry-run
+    is_json = args.json or ("--json" in sys.argv)
+    is_dry_run = getattr(args, "dry_run", False) or ("--dry-run" in sys.argv)
 
     mm = ModelManager()
-
     cmd = args.subcommand or "list"
 
     if cmd == "list":
@@ -122,6 +147,19 @@ def main():
             else:
                 print(f"Model '{model_id}' not found.")
                 sys.exit(1)
+
+    elif cmd == "migrate":
+        model_id = getattr(args, "model_id", "v5_5_ru")
+        migrator = ModelMigrator(model_manager=mm)
+        result = migrator.migrate_legacy_model(model_id=model_id, dry_run=is_dry_run)
+
+        if is_json:
+            print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            print(format_migration_result(result))
+
+        if not result.success:
+            sys.exit(1)
 
 
 if __name__ == "__main__":
