@@ -671,7 +671,7 @@ class ModelSwitcher:
                 dry_run=dry_run,
             )
         else:
-            final_status = "rollback_unavailable" if switch_res.status in ("model_not_found", "model_file_missing") else switch_res.status
+            final_status = "rollback_unavailable" if switch_res.status in ("model_not_found", "model_file_missing", "metadata_invalid") else switch_res.status
             return RollbackResult(
                 success=False,
                 status=final_status,
