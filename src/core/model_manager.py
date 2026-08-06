@@ -258,8 +258,14 @@ class ModelManager:
                 m.active = (m.model_id == state_active_id and m.valid)
         else:
             # Если state.json отсутствует или указывал невалидную модель:
-            has_active = any(m.active for m in models if m.valid)
-            if not has_active:
+            found_active = False
+            for m in models:
+                if m.valid:
+                    if m.active and not found_active:
+                        found_active = True
+                    elif m.active and found_active:
+                        m.active = False
+            if not found_active:
                 for m in models:
                     if m.valid:
                         m.active = True
