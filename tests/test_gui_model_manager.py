@@ -386,24 +386,28 @@ def test_25_no_false_rollback(controller: ModelManagerController):
     assert controller.can_rollback() is False
 
 
-def test_26_unmigrated_legacy_model_detection(controller: ModelManagerController):
-    """26. Доступность миграции отключается, если модель уже мигрирована."""
-    # По умолчанию mock_mm имеет модели в пользовательском хранилище с совпадающим SHA/размером
+def test_26_unmigrated_legacy_model_detection(controller: ModelManagerController, tmp_path: Path):
+    """26. Доступность миграции отключается, если модель строго идентична и уже мигрирована."""
+    leg_file = tmp_path / "venv_model.pt"
+    user_file = tmp_path / "user_model.pt"
+    leg_file.write_bytes(b"silero_model_content_12345")
+    user_file.write_bytes(b"silero_model_content_12345")
+
     leg = ModelMetadata(
         model_id="v5_5_ru",
         filename="v5_5_ru_ru.pt",
-        path="/tmp/venv/v5_5_ru.pt",
-        size_bytes=145420684,
-        sha256="50081637b602126ee06cb3bc8a744d25651d2da149ee8864b9a379bfdd934437",
+        path=str(leg_file),
+        size_bytes=len(b"silero_model_content_12345"),
+        sha256="fake_sha",
         valid=True,
         source="legacy_venv",
     )
     controller.model_manager.detect_legacy_models.return_value = [leg]
     controller.model_manager.get_model_info.return_value = ModelMetadata(
         model_id="v5_5_ru",
-        path="/tmp/user/v5_5_ru.pt",
-        size_bytes=145420684,
-        sha256="50081637b602126ee06cb3bc8a744d25651d2da149ee8864b9a379bfdd934437",
+        path=str(user_file),
+        size_bytes=len(b"silero_model_content_12345"),
+        sha256="fake_sha",
         valid=True,
         source="user_models",
     )
@@ -417,10 +421,55 @@ def test_26_unmigrated_legacy_model_detection(controller: ModelManagerController
 def test_27_confidence_localization():
     """27. Презентационная локализация уровней уверенности."""
     from src.gui.model_manager_dialog import CONFIDENCE_LABELS
+
     assert CONFIDENCE_LABELS.get("high") == "высокий"
     assert CONFIDENCE_LABELS.get("medium") == "средний"
     assert CONFIDENCE_LABELS.get("low") == "низкий"
     assert CONFIDENCE_LABELS.get("none") == "отсутствует"
+
+
+def test_28_repeat_migration_safety(controller: ModelManagerController):
+    """28. Повторный вызов миграции возвращает already_migrated без ошибок."""
+    controller.model_migrator.migrate_legacy_model.return_value = MigrationResult(
+        success=True,
+        status="already_migrated",
+        message="Модель уже мигрирована.",
+    )
+    comp_box = []
+    controller.migrate_legacy_model(on_complete=lambda s, m: comp_box.append((s, m)))
+    if controller._active_worker:
+        controller._active_worker.join(timeout=2.0)
+
+    assert comp_box[0][0] is True
+    assert "перенесена в постоянное хранилище" in comp_box[0][1]
+
+
+def test_29_different_sha256_prevents_duplicate_migration(controller: ModelManagerController, tmp_path: Path):
+    """29. Совпадение только размера при разных SHA-256 не считается идентичным (target_conflict)."""
+    leg_file = tmp_path / "venv_model.pt"
+    user_file = tmp_path / "user_model.pt"
+    leg_file.write_bytes(b"content_AAA_12345")
+    user_file.write_bytes(b"content_BBB_12345")  # Тот же размер (17 байт), но другой SHA
+
+    leg = ModelMetadata(
+        model_id="v5_5_ru",
+        filename="v5_5_ru_ru.pt",
+        path=str(leg_file),
+        size_bytes=17,
+        valid=True,
+        source="legacy_venv",
+    )
+    controller.model_manager.detect_legacy_models.return_value = [leg]
+    controller.model_manager.get_model_info.return_value = ModelMetadata(
+        model_id="v5_5_ru",
+        path=str(user_file),
+        size_bytes=17,
+        valid=True,
+        source="user_models",
+    )
+
+    # При конфликте отличающегося файла миграция не разрешается как простой повтор
+    assert controller.is_legacy_available_for_migration() is False
 
 
 def test_28_repeat_migration_safety(controller: ModelManagerController):

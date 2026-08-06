@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from src.core.download_manager import DownloadManager, DownloadProgress, DownloadRequest, DownloadResult
@@ -128,22 +129,43 @@ class ModelManagerController:
             return False
 
     def is_legacy_available_for_migration(self) -> bool:
-        """Проверить, доступна ли legacy-модель в .venv для миграции."""
+        """Проверить, доступна ли немигрированная legacy-модель в .venv."""
         try:
             legacies = self.model_manager.detect_legacy_models()
             for leg in legacies:
                 if not leg.valid or not leg.path:
                     continue
+
+                leg_path = Path(leg.path)
+                if not leg_path.is_file():
+                    continue
+
                 user_info = self.model_manager.get_model_info(leg.model_id)
-                if user_info and user_info.valid and user_info.source != "legacy_venv":
-                    if user_info.sha256 and leg.sha256 and user_info.sha256 == leg.sha256:
-                        continue
-                    if user_info.size_bytes and leg.size_bytes and user_info.size_bytes == leg.size_bytes:
-                        continue
+                if user_info and user_info.valid and user_info.path:
+                    user_path = Path(user_info.path)
+                    if user_path.is_file():
+                        # Строгая проверка совпадения размера и хеша SHA-256
+                        leg_size = leg.size_bytes or leg_path.stat().st_size
+                        user_size = user_info.size_bytes or user_path.stat().st_size
+
+                        from src.core.model_inspector import _calculate_sha256
+
+                        leg_sha = leg.sha256 or _calculate_sha256(leg_path)
+                        user_sha = user_info.sha256 or _calculate_sha256(user_path)
+
+                        if leg_size == user_size and leg_sha == user_sha:
+                            # Модель строго идентична и уже зарегистрирована
+                            continue
+                        else:
+                            # Существует целевой файл с отличающимся размером/SHA-256 (target_conflict)
+                            continue
+
+                # Пользовательская модель не найдена — доступна миграция
                 return True
+
             return False
         except Exception as exc:
-            logger.error("Ошибка поиска немигрированной legacy-модели: %s", exc)
+            logger.error("Ошибка проверки доступности миграции legacy-модели: %s", exc)
             return False
 
     def check_updates(
