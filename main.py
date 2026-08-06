@@ -27,6 +27,13 @@ def main():
         model_info_main()
         return
 
+    if len(sys.argv) > 1 and sys.argv[1] in ("models", "model-manager", "--models"):
+        from tools.model_manager import main as model_manager_main
+
+        sys.argv.pop(1)
+        model_manager_main()
+        return
+
     # Настройка логирования
     log_dir = Path.home() / ".audiobook-generator"
     log_file = log_dir / "audiobook-generator.log"
