@@ -54,6 +54,7 @@ class ModelMetadata:
     is_legacy: bool = False
     valid: bool = True
     error: Optional[str] = None
+    remote_artifact: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Преобразовать в словарь."""
@@ -149,6 +150,7 @@ class ModelManager:
                     active=active,
                     is_legacy=False,
                     valid=True,
+                    remote_artifact=raw_meta.get("remote_artifact"),
                 )
             else:
                 return ModelMetadata(
@@ -160,6 +162,7 @@ class ModelManager:
                     active=bool(raw_meta.get("active", False)),
                     valid=False,
                     error=f"Файл модели '{filename or '*.pt'}' отсутствует в директории.",
+                    remote_artifact=raw_meta.get("remote_artifact"),
                 )
 
         # Если нет metadata.json, но есть .pt
