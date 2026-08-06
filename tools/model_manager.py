@@ -15,6 +15,7 @@ project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from src.core.model_inspector import _format_size
 from src.core.model_manager import ModelManager, ModelMetadata
 from src.core.model_migrator import MigrationResult, ModelMigrator
 
@@ -92,11 +93,20 @@ def main():
     parser_migrate.add_argument("--model-id", default="v5_5_ru", help="Идентификатор модели (по умолчанию v5_5_ru)")
     parser_migrate.add_argument("--json", action="store_true", help="Вывод в JSON")
 
+    # Subcommand: download
+    parser_download = subparsers.add_parser("download", help="Загрузка новой официальной модели Silero TTS")
+    parser_download.add_argument("--dry-run", action="store_true", help="Режим проверки плана загрузки без скачивания файла")
+    parser_download.add_argument("--yes", action="store_true", help="Подтверждение реального скачивания файла")
+    parser_download.add_argument("--force", action="store_true", help="Принудительное скачивание, даже если локальная модель актуальна")
+    parser_download.add_argument("--json", action="store_true", help="Вывод в JSON")
+
     args, unknown = parser.parse_known_args()
 
-    # Проверяем флаги --json и --dry-run
+    # Проверяем флаги --json, --dry-run, --yes, --force
     is_json = args.json or ("--json" in sys.argv)
     is_dry_run = getattr(args, "dry_run", False) or ("--dry-run" in sys.argv)
+    is_yes = getattr(args, "yes", False) or ("--yes" in sys.argv)
+    is_force = getattr(args, "force", False) or ("--force" in sys.argv)
 
     mm = ModelManager()
     cmd = args.subcommand or "list"
@@ -160,6 +170,82 @@ def main():
 
         if not result.success:
             sys.exit(1)
+
+    elif cmd == "download":
+        from src.core.download_manager import DownloadManager, DownloadRequest, DownloadResult
+        from src.core.update_checker import UpdateChecker
+
+        checker = UpdateChecker(model_manager=mm)
+        update_res = checker.check_for_updates()
+
+        if update_res.status == "up_to_date" and not is_force:
+            res = DownloadResult(
+                status="no_update_available",
+                model_id=update_res.local_model_id,
+                url=update_res.remote_package_url,
+                message="Обновлений не обнаружено. Локальная модель актуальна.",
+                dry_run=is_dry_run,
+            )
+            if is_json:
+                print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+            else:
+                print("План скачивания модели Silero:")
+                print("----------------------------")
+                print(f"Текущая модель: {update_res.local_model_id}")
+                print("Результат: Обновлений не обнаружено. Скачивание не требуется.")
+            return
+
+        if not update_res.remote_model_id or not update_res.remote_package_url:
+            res = DownloadResult(
+                status="manifest_error",
+                message=f"Не удалось определить параметры скачивания ({update_res.message}).",
+                dry_run=is_dry_run,
+            )
+            if is_json:
+                print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+            else:
+                print(f"Ошибка: {res.message}")
+            sys.exit(1)
+
+        req = DownloadRequest(
+            model_id=update_res.remote_model_id,
+            url=update_res.remote_package_url,
+            expected_size_bytes=update_res.remote_size_bytes,
+            remote_etag=update_res.remote_etag,
+            remote_last_modified=update_res.remote_last_modified,
+            remote_sha256=update_res.remote_sha256,
+        )
+
+        dl_manager = DownloadManager(model_manager=mm)
+
+        if is_dry_run or not is_yes:
+            res = dl_manager.download_model(req, dry_run=True)
+            if is_json:
+                print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+            else:
+                print("План скачивания модели Silero (Dry Run):")
+                print("---------------------------------------")
+                print(f"Локальная модель:      {update_res.local_model_id}")
+                print(f"Удалённая модель:      {req.model_id}")
+                print(f"URL источника:         {req.url}")
+                print(f"Ожидаемый размер:      {_format_size(req.expected_size_bytes) if req.expected_size_bytes else 'неизвестно'}")
+                print(f"Целевой путь:          {res.installed_path}")
+                print(f"Автоматическая активация: НЕТ (active=False)")
+                print("")
+                if not is_yes and not is_dry_run:
+                    print("Для выполнения реального скачивания передайте флаг --yes.")
+        else:
+            res = dl_manager.download_model(req, dry_run=False)
+            if is_json:
+                print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+            else:
+                print(f"Результат скачивания модели {req.model_id}:")
+                print(f"Статус:      {res.status.upper()}")
+                print(f"Путь:        {res.installed_path or 'N/A'}")
+                print(f"Сообщение:   {res.message}")
+
+            if res.status not in ("success", "already_downloaded"):
+                sys.exit(1)
 
 
 if __name__ == "__main__":
