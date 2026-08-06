@@ -130,10 +130,20 @@ class ModelManagerController:
     def is_legacy_available_for_migration(self) -> bool:
         """Проверить, доступна ли legacy-модель в .venv для миграции."""
         try:
-            legacies = self.model_migrator.model_manager.detect_legacy_models()
-            return len(legacies) > 0
+            legacies = self.model_manager.detect_legacy_models()
+            for leg in legacies:
+                if not leg.valid or not leg.path:
+                    continue
+                user_info = self.model_manager.get_model_info(leg.model_id)
+                if user_info and user_info.valid and user_info.source != "legacy_venv":
+                    if user_info.sha256 and leg.sha256 and user_info.sha256 == leg.sha256:
+                        continue
+                    if user_info.size_bytes and leg.size_bytes and user_info.size_bytes == leg.size_bytes:
+                        continue
+                return True
+            return False
         except Exception as exc:
-            logger.error("Ошибка поиска legacy-модели: %s", exc)
+            logger.error("Ошибка поиска немигрированной legacy-модели: %s", exc)
             return False
 
     def check_updates(

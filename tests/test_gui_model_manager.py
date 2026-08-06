@@ -384,3 +384,56 @@ def test_25_no_false_rollback(controller: ModelManagerController):
     """25. Rollback недоступен при отсутствии предыдущей модели."""
     controller.model_switcher.can_rollback.return_value = False
     assert controller.can_rollback() is False
+
+
+def test_26_unmigrated_legacy_model_detection(controller: ModelManagerController):
+    """26. Доступность миграции отключается, если модель уже мигрирована."""
+    # По умолчанию mock_mm имеет модели в пользовательском хранилище с совпадающим SHA/размером
+    leg = ModelMetadata(
+        model_id="v5_5_ru",
+        filename="v5_5_ru_ru.pt",
+        path="/tmp/venv/v5_5_ru.pt",
+        size_bytes=145420684,
+        sha256="50081637b602126ee06cb3bc8a744d25651d2da149ee8864b9a379bfdd934437",
+        valid=True,
+        source="legacy_venv",
+    )
+    controller.model_manager.detect_legacy_models.return_value = [leg]
+    controller.model_manager.get_model_info.return_value = ModelMetadata(
+        model_id="v5_5_ru",
+        path="/tmp/user/v5_5_ru.pt",
+        size_bytes=145420684,
+        sha256="50081637b602126ee06cb3bc8a744d25651d2da149ee8864b9a379bfdd934437",
+        valid=True,
+        source="user_models",
+    )
+    assert controller.is_legacy_available_for_migration() is False
+
+    # Если пользовательской модели нет, миграция доступна
+    controller.model_manager.get_model_info.return_value = None
+    assert controller.is_legacy_available_for_migration() is True
+
+
+def test_27_confidence_localization():
+    """27. Презентационная локализация уровней уверенности."""
+    from src.gui.model_manager_dialog import CONFIDENCE_LABELS
+    assert CONFIDENCE_LABELS.get("high") == "высокий"
+    assert CONFIDENCE_LABELS.get("medium") == "средний"
+    assert CONFIDENCE_LABELS.get("low") == "низкий"
+    assert CONFIDENCE_LABELS.get("none") == "отсутствует"
+
+
+def test_28_repeat_migration_safety(controller: ModelManagerController):
+    """28. Повторный вызов миграции возвращает already_migrated без ошибок."""
+    controller.model_migrator.migrate_legacy_model.return_value = MigrationResult(
+        success=True,
+        status="already_migrated",
+        message="Модель уже мигрирована.",
+    )
+    comp_box = []
+    controller.migrate_legacy_model(on_complete=lambda s, m: comp_box.append((s, m)))
+    if controller._active_worker:
+        controller._active_worker.join(timeout=2.0)
+
+    assert comp_box[0][0] is True
+    assert "перенесена в постоянное хранилище" in comp_box[0][1]

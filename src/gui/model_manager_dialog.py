@@ -27,6 +27,14 @@ from src.gui.model_manager_controller import ModelManagerController
 logger = logging.getLogger(__name__)
 
 
+CONFIDENCE_LABELS = {
+    "high": "высокий",
+    "medium": "средний",
+    "low": "низкий",
+    "none": "отсутствует",
+}
+
+
 class ModelManagerDialog(tk.Toplevel):
     """Диалоговое окно управления моделями Silero TTS."""
 
@@ -286,21 +294,28 @@ class ModelManagerDialog(tk.Toplevel):
         def _on_success(res: CheckUpdateResult):
             if self._closed:
                 return
+            conf_text = CONFIDENCE_LABELS.get(res.comparison_confidence, res.comparison_confidence)
             if res.status == "update_available":
                 size_mb = (res.remote_size_bytes or 0) / (1024 * 1024)
                 msg = (
                     f"Доступна новая версия модели: {res.remote_model_id}\n"
                     f"Размер: {size_mb:.1f} MB\n"
-                    f"Уверенность: {res.comparison_confidence}\n\n"
+                    f"Уровень уверенности: {conf_text}\n\n"
                     f"{res.message}"
                 )
                 messagebox.showinfo("Доступно обновление", msg, parent=self)
             else:
-                conf_text = f"Уровень уверенности: {res.comparison_confidence}."
                 if res.comparison_confidence == "low":
-                    msg = f"Новая версия не обнаружена, но идентичность файла подтверждена только по размеру.\n({conf_text})"
+                    msg = (
+                        f"Установлена последняя версия: {res.local_model_id}.\n\n"
+                        f"Уровень уверенности: {conf_text}.\n"
+                        f"Идентичность файла подтверждена только по размеру."
+                    )
                 else:
-                    msg = f"Установлена последняя версия: {res.local_model_id}.\n({conf_text})"
+                    msg = (
+                        f"Установлена последняя версия: {res.local_model_id}.\n\n"
+                        f"Уровень уверенности: {conf_text}."
+                    )
                 messagebox.showinfo("Проверка обновлений", msg, parent=self)
 
             self._refresh_ui()
