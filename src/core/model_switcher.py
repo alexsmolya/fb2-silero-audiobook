@@ -673,6 +673,32 @@ class ModelSwitcher:
             message=f"Модель '{model_id}' успешно активирована.",
         )
 
+    def can_rollback(self) -> bool:
+        """Проверить, доступна ли валидная предыдущая модель для отката."""
+        state = self.get_state()
+        current_active = self.model_manager.get_active_model()
+        current_id = current_active.model_id if current_active else None
+
+        previous_id = state.get("previous_model_id")
+        if not previous_id and self.history_log_file.is_file():
+            try:
+                lines = self.history_log_file.read_text(encoding="utf-8").strip().splitlines()
+                for line in reversed(lines):
+                    if not line:
+                        continue
+                    ev = json.loads(line)
+                    if ev.get("action") == "activate" and ev.get("status") == "success":
+                        if ev.get("from_model_id") and ev.get("from_model_id") != current_id:
+                            previous_id = ev.get("from_model_id")
+                            break
+            except Exception as exc:
+                logger.debug("Ошибка чтения журнала переключений: %s", exc)
+
+        if not previous_id:
+            return False
+        prev_info = self.model_manager.get_model_info(previous_id)
+        return prev_info is not None and prev_info.valid
+
     def rollback_active_model(self, dry_run: bool = False) -> RollbackResult:
         """Откат к предыдущей заведомо рабочей модели."""
         state = self.get_state()

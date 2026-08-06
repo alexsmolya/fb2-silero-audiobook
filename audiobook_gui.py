@@ -296,7 +296,15 @@ class AudiobookGeneratorGUI:
             state="readonly",
         )
         self.voice_box.grid(
-            row=4, column=1, columnspan=2, sticky="ew", pady=6
+            row=4, column=1, sticky="ew", pady=6
+        )
+        self.model_manager_button = ttk.Button(
+            main,
+            text="Модели Silero…",
+            command=self._open_model_manager_dialog,
+        )
+        self.model_manager_button.grid(
+            row=4, column=2, padx=(10, 0), pady=6
         )
 
         ttk.Label(main, text="Выходная папка:").grid(
@@ -401,6 +409,18 @@ class AudiobookGeneratorGUI:
     def _on_voice_source_changed(self, _event=None) -> None:
         self._refresh_voices()
         self._refresh_gpu_state()
+
+    def get_current_voice_code(self) -> str:
+        """Получить строковый код текущего выбранного голоса (например, 'xenia' или 'eugene')."""
+        voice_label = self.voice_var.get()
+        return self.voice_values.get(voice_label, "xenia")
+
+    def _open_model_manager_dialog(self) -> None:
+        """Открыть диалоговое окно управления моделями Silero TTS."""
+        from src.gui.model_manager_dialog import ModelManagerDialog
+
+        voice_code = self.get_current_voice_code()
+        ModelManagerDialog(self.root, current_voice=voice_code)
 
     def _refresh_voices(self) -> None:
         backend = BACKENDS.get(self.backend_var.get(), "edge")
