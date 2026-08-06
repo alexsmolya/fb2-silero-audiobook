@@ -167,6 +167,47 @@ ls -t $log_dir/fb2-silero-audiobook-run-*.jsonl | head -n 1
 
 Для анализа производительности передайте один найденный `.jsonl`-файл вместе с кратким описанием запуска. Публиковать весь каталог не требуется.
 
+## Управление моделями Silero TTS (CLI)
+
+Локальные модели Silero TTS хранятся вне `.venv` в пользовательском хранилище `~/.local/share/fb2-silero-audiobook/models/`. Для управления моделями и проверки обновлений доступны CLI-команды:
+
+```fish
+# Показать список локально установленных моделей
+uv run python main.py models list
+
+# Показать текущую активную модель
+uv run python main.py models active
+
+# Информация по конкретной модели
+uv run python main.py models info v5_5_ru
+
+# Безопасная миграция модели из .venv в пользовательское хранилище
+uv run python main.py models migrate --dry-run
+
+# Проверить наличие новых официальных моделей (только инспекция, без скачивания)
+uv run python main.py check-updates
+
+# Безопасное скачивание новой модели (новые модели регистрируются с active=false)
+uv run python main.py models download --dry-run
+uv run python main.py models download --yes
+
+# Изолированный smoke-test обязательных голосов (eugene и xenia)
+uv run python main.py models test v5_5_ru
+uv run python main.py models test v5_5_ru --all-speakers
+
+# Безопасная активация модели (требует успешного smoke-test)
+uv run python main.py models activate v5_6_ru --dry-run
+uv run python main.py models activate v5_6_ru --yes
+
+# Откат (rollback) к предыдущей заведомо рабочей модели
+uv run python main.py models rollback --dry-run
+uv run python main.py models rollback --yes
+```
+
+- **Безопасность скачивания:** Скачивание новой модели регистрирует её с статусом `active=false` и не меняет текущую активную модель.
+- **Обязательные голоса:** Активация требует успешного прохождения smoke-test для обязательных русских голосов `eugene` и `xenia`.
+- **Сохранение моделей:** При откате (`rollback`) бинарные файлы ранее загруженных моделей сохраняются на диске.
+
 ## Как озвучить книгу
 
 1. Запустите `uv run python audiobook_gui.py`.
