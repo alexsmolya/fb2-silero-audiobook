@@ -117,16 +117,17 @@ def main():
     # Subcommand: test
     parser_test = subparsers.add_parser("test", help="Изолированный smoke-test модели синтеза речи")
     parser_test.add_argument("model_id", nargs="?", default="v5_5_ru", help="Идентификатор модели для тестирования (напр. v5_5_ru)")
-    parser_test.add_argument("--voice", default="eugene", help="Голос для тестирования")
+    parser_test.add_argument("--all-speakers", action="store_true", help="Проверить все доступные голоса модели")
     parser_test.add_argument("--json", action="store_true", help="Вывод в JSON")
 
     args, unknown = parser.parse_known_args()
 
-    # Проверяем флаги --json, --dry-run, --yes, --force
+    # Проверяем флаги --json, --dry-run, --yes, --force, --all-speakers
     is_json = args.json or ("--json" in sys.argv)
     is_dry_run = getattr(args, "dry_run", False) or ("--dry-run" in sys.argv)
     is_yes = getattr(args, "yes", False) or ("--yes" in sys.argv)
     is_force = getattr(args, "force", False) or ("--force" in sys.argv)
+    is_all_speakers = getattr(args, "all_speakers", False) or ("--all-speakers" in sys.argv)
 
     mm = ModelManager()
     cmd = args.subcommand or "list"
@@ -329,22 +330,35 @@ def main():
         from src.core.model_switcher import ModelSwitcher
 
         model_id = getattr(args, "model_id", "v5_5_ru")
-        voice = getattr(args, "voice", "eugene")
         switcher = ModelSwitcher(model_manager=mm)
-        res = switcher.run_smoke_test(model_id=model_id, voice=voice)
+        res = switcher.run_smoke_test(model_id=model_id, all_speakers=is_all_speakers)
 
         if is_json:
             print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
         else:
-            print(f"Smoke-test модели {model_id}:")
-            print("---------------------------------------")
-            print(f"Результат:             {'УСПЕШНО' if res.success else 'ОШИБКА (' + res.status + ')'}")
-            print(f"Голос:                 {res.voice or 'N/A'}")
-            print(f"Sample Rate:           {res.sample_rate or 'N/A'} Гц")
-            print(f"Длительность аудио:    {res.audio_duration_sec} сек")
-            print(f"Время загрузки:        {res.load_time_sec} сек")
-            print(f"Время синтеза:         {res.synth_time_sec} сек")
-            print(f"Сообщение:             {res.message}")
+            print(f"Модель: {model_id}")
+            print("")
+            print("Доступные голоса:")
+            print(", ".join(res.available_speakers) if res.available_speakers else "Не найдено")
+            print("")
+            print("Проверка обязательных голосов:")
+            print("")
+
+            for sp in res.tested_speakers:
+                sp_res = res.speaker_results.get(sp)
+                if sp_res:
+                    if sp_res.status == "success":
+                        print(f"{sp}: успешно ({sp_res.duration_seconds} сек, SR {sp_res.sample_rate})")
+                    else:
+                        print(f"{sp}: ошибка ({sp_res.message})")
+                else:
+                    print(f"{sp}: не проверялся")
+
+            print("")
+            if res.success:
+                print("Модель готова к активации.")
+            else:
+                print(f"Модель НЕ готова к активации ({res.message}).")
 
         if not res.success:
             sys.exit(1)

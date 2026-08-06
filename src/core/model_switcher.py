@@ -2,7 +2,7 @@
 Модуль безопасного управляемого переключения моделей Silero TTS (ModelSwitcher).
 
 Осуществляет валидацию метаданных/хешей, предварительный изолированный smoke-test
-синтеза речи, атомарное переключение active и поддержку отката (rollback).
+обязательных русских голосов (eugene, xenia), атомарное переключение active и поддержку отката (rollback).
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from src.core.model_manager import ModelManager, ModelMetadata
 logger = logging.getLogger(__name__)
 
 DEFAULT_SMOKE_TEST_PHRASE = "Это проверка новой речевой модели."
-DEFAULT_SMOKE_TEST_VOICE = "eugene"
+REQUIRED_RUSSIAN_SPEAKERS = ["eugene", "xenia"]
 DEFAULT_SMOKE_TEST_TIMEOUT = 15.0
 
 
@@ -34,29 +34,63 @@ class SwitchRequest:
     """Параметры запроса на активацию модели."""
 
     model_id: str
+    voice: Optional[str] = None
     force: bool = False
     skip_smoke_test: bool = False
 
 
 @dataclass
-class SmokeTestResult:
-    """Результат выполнения smoke-test модели."""
+class SpeakerTestResult:
+    """Результат проверки отдельного диктора (speaker)."""
 
-    success: bool
-    status: str
-    # Статусы: "success" | "load_failed" | "synth_failed" | "timeout" | "empty_audio" | "nan_audio" | "voice_missing" | "error"
-
-    model_id: str
-    voice: Optional[str] = None
+    speaker: str
+    status: str  # "success" | "missing" | "synth_failed" | "empty_audio" | "nan_audio" | "timeout"
     sample_rate: Optional[int] = None
-    audio_duration_sec: float = 0.0
-    load_time_sec: float = 0.0
-    synth_time_sec: float = 0.0
+    audio_samples: int = 0
+    duration_seconds: float = 0.0
+    synthesis_seconds: float = 0.0
     message: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Преобразовать в словарь."""
         return asdict(self)
+
+
+@dataclass
+class SmokeTestResult:
+    """Результат выполнения комплексного smoke-test модели."""
+
+    success: bool
+    status: str
+    # Статусы: "success" | "load_failed" | "synth_failed" | "timeout" | "missing_required_speakers" | "error"
+
+    model_id: str
+    available_speakers: List[str]
+    tested_speakers: List[str]
+    missing_required_speakers: List[str]
+    failed_speakers: List[str]
+    speaker_results: Dict[str, SpeakerTestResult]
+    load_time_sec: float = 0.0
+    message: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Преобразовать в словарь."""
+        d = {
+            "success": self.success,
+            "status": self.status,
+            "model_id": self.model_id,
+            "available_speakers": self.available_speakers,
+            "tested_speakers": self.tested_speakers,
+            "missing_required_speakers": self.missing_required_speakers,
+            "failed_speakers": self.failed_speakers,
+            "speaker_results": {
+                k: v.to_dict() if hasattr(v, "to_dict") else v
+                for k, v in self.speaker_results.items()
+            },
+            "load_time_sec": self.load_time_sec,
+            "message": self.message,
+        }
+        return d
 
 
 @dataclass
@@ -67,8 +101,8 @@ class SwitchResult:
     status: str
     # Статусы: "success" | "already_active" | "model_not_found" | "metadata_invalid" |
     #          "model_file_missing" | "size_mismatch" | "hash_mismatch" | "smoke_test_failed" |
-    #          "activation_conflict" | "rollback_unavailable" | "rollback_success" |
-    #          "write_error" | "error" | "ready"
+    #          "voice_missing" | "activation_conflict" | "rollback_unavailable" |
+    #          "rollback_success" | "write_error" | "error" | "ready"
 
     model_id: Optional[str] = None
     previous_model_id: Optional[str] = None
@@ -227,22 +261,28 @@ class ModelSwitcher:
         self,
         model_id: str,
         phrase: str = DEFAULT_SMOKE_TEST_PHRASE,
-        voice: str = DEFAULT_SMOKE_TEST_VOICE,
+        speakers_to_test: Optional[List[str]] = None,
+        all_speakers: bool = False,
         timeout: float = DEFAULT_SMOKE_TEST_TIMEOUT,
     ) -> SmokeTestResult:
-        """Выполнить изолированный smoke-test синтеза речи для целевой модели."""
+        """Выполнить изолированный smoke-test синтеза речи для обязательных и дополнительных голосов."""
         valid, err_status, model_info = self.validate_model_for_switch(model_id)
         if not valid:
             return SmokeTestResult(
                 success=False,
                 status=err_status,
                 model_id=model_id,
+                available_speakers=[],
+                tested_speakers=[],
+                missing_required_speakers=[],
+                failed_speakers=[],
+                speaker_results={},
                 message=f"Валидация перед smoke-test не пройдена: {err_status}",
             )
 
         start_load = time.monotonic()
         try:
-            # Изолированная инициализация модели через PackageImporter
+            # Изолированная загрузка модели ОДИН РАЗ
             from torch.package import PackageImporter
             import torch
 
@@ -250,125 +290,189 @@ class ModelSwitcher:
             tts_model = importer.load_pickle("tts_models", "model")
             load_time = time.monotonic() - start_load
 
-            # Проверяем доступность голосов в модели
-            available_speakers = getattr(tts_model, "speakers", [])
-            selected_voice = voice
-            if available_speakers:
-                if voice not in available_speakers:
-                    selected_voice = available_speakers[0]
-                    logger.info("Голос %s не найден в модели %s. Выбран %s", voice, model_id, selected_voice)
-
-            # Проверяем поддерживаемые sample rates
+            available_speakers = list(getattr(tts_model, "speakers", []))
             sample_rates = getattr(tts_model, "sample_rates", [24000])
             target_sr = sample_rates[-1] if sample_rates else 24000
 
-            # Выполняем синтез короткой фразы
-            start_synth = time.monotonic()
-            audio_tensor = tts_model.apply_tts(text=phrase, speaker=selected_voice, sample_rate=target_sr)
-            synth_time = time.monotonic() - start_synth
-
-            # Анализ результатов аудио
-            if audio_tensor is None or (hasattr(audio_tensor, "__len__") and len(audio_tensor) == 0):
-                return SmokeTestResult(
-                    success=False,
-                    status="empty_audio",
-                    model_id=model_id,
-                    voice=selected_voice,
-                    sample_rate=target_sr,
-                    load_time_sec=load_time,
-                    synth_time_sec=synth_time,
-                    message="Модель вернула пустой аудио-тензор.",
-                )
-
-            # Перевод в numpy/list для численной проверки
-            if hasattr(audio_tensor, "detach"):
-                samples = audio_tensor.detach().cpu().numpy()
-            elif hasattr(audio_tensor, "tolist"):
-                samples = audio_tensor.tolist()
+            # Определяем список дикторов для тестирования
+            if all_speakers:
+                target_speakers = list(available_speakers)
+            elif speakers_to_test:
+                target_speakers = list(speakers_to_test)
             else:
-                samples = audio_tensor
+                target_speakers = list(REQUIRED_RUSSIAN_SPEAKERS)
 
-            # Вычисление длительности и проверка на NaN / Inf / Нули
-            num_samples = len(samples)
-            duration_sec = num_samples / float(target_sr)
+            tested_speakers = []
+            missing_required_speakers = []
+            failed_speakers = []
+            speaker_results: Dict[str, SpeakerTestResult] = {}
 
-            if duration_sec < 0.2:
-                return SmokeTestResult(
-                    success=False,
-                    status="empty_audio",
-                    model_id=model_id,
-                    voice=selected_voice,
-                    sample_rate=target_sr,
-                    audio_duration_sec=duration_sec,
-                    load_time_sec=load_time,
-                    synth_time_sec=synth_time,
-                    message=f"Длительность сгенерированного аудио слишком мала ({duration_sec:.2f} сек).",
-                )
-
-            # Проверка на NaN / Inf
             import numpy as np
-            if np.isnan(samples).any() or np.isinf(samples).any():
-                return SmokeTestResult(
-                    success=False,
-                    status="nan_audio",
-                    model_id=model_id,
-                    voice=selected_voice,
-                    sample_rate=target_sr,
-                    audio_duration_sec=duration_sec,
-                    load_time_sec=load_time,
-                    synth_time_sec=synth_time,
-                    message="Синтезированное аудио содержит некорректные значения (NaN / Inf).",
-                )
 
-            max_amp = float(np.max(np.abs(samples)))
-            if max_amp < 0.0001:
-                return SmokeTestResult(
-                    success=False,
-                    status="empty_audio",
-                    model_id=model_id,
-                    voice=selected_voice,
-                    sample_rate=target_sr,
-                    audio_duration_sec=duration_sec,
-                    load_time_sec=load_time,
-                    synth_time_sec=synth_time,
-                    message="Синтезированный сигнал полностью молчаливый (тишина).",
-                )
+            for speaker in target_speakers:
+                tested_speakers.append(speaker)
+
+                # Проверка наличия голоса в модели
+                if speaker not in available_speakers:
+                    if speaker in REQUIRED_RUSSIAN_SPEAKERS:
+                        missing_required_speakers.append(speaker)
+                    failed_speakers.append(speaker)
+
+                    speaker_results[speaker] = SpeakerTestResult(
+                        speaker=speaker,
+                        status="missing",
+                        message=f"Голос '{speaker}' отсутствует в модели.",
+                    )
+                    continue
+
+                # Тестирование синтеза отдельного голоса
+                start_synth = time.monotonic()
+                try:
+                    audio_tensor = tts_model.apply_tts(text=phrase, speaker=speaker, sample_rate=target_sr)
+                    synth_time = time.monotonic() - start_synth
+
+                    if audio_tensor is None or (hasattr(audio_tensor, "__len__") and len(audio_tensor) == 0):
+                        failed_speakers.append(speaker)
+                        speaker_results[speaker] = SpeakerTestResult(
+                            speaker=speaker,
+                            status="empty_audio",
+                            sample_rate=target_sr,
+                            synthesis_seconds=round(synth_time, 3),
+                            message="Модель вернула пустой аудио-тензор.",
+                        )
+                        continue
+
+                    if hasattr(audio_tensor, "detach"):
+                        samples = audio_tensor.detach().cpu().numpy()
+                    elif hasattr(audio_tensor, "tolist"):
+                        samples = audio_tensor.tolist()
+                    else:
+                        samples = audio_tensor
+
+                    samples_arr = np.array(samples, dtype=float)
+                    num_samples = len(samples_arr)
+                    duration_sec = num_samples / float(target_sr)
+
+                    if duration_sec < 0.2:
+                        failed_speakers.append(speaker)
+                        speaker_results[speaker] = SpeakerTestResult(
+                            speaker=speaker,
+                            status="empty_audio",
+                            sample_rate=target_sr,
+                            audio_samples=num_samples,
+                            duration_seconds=round(duration_sec, 2),
+                            synthesis_seconds=round(synth_time, 3),
+                            message=f"Длительность аудио слишком мала ({duration_sec:.2f} сек).",
+                        )
+                        continue
+
+                    if np.isnan(samples_arr).any() or np.isinf(samples_arr).any():
+                        failed_speakers.append(speaker)
+                        speaker_results[speaker] = SpeakerTestResult(
+                            speaker=speaker,
+                            status="nan_audio",
+                            sample_rate=target_sr,
+                            audio_samples=num_samples,
+                            duration_seconds=round(duration_sec, 2),
+                            synthesis_seconds=round(synth_time, 3),
+                            message="Аудио содержит нечисловые значения (NaN / Inf).",
+                        )
+                        continue
+
+                    max_amp = float(np.max(np.abs(samples_arr)))
+                    if max_amp < 0.0001:
+                        failed_speakers.append(speaker)
+                        speaker_results[speaker] = SpeakerTestResult(
+                            speaker=speaker,
+                            status="empty_audio",
+                            sample_rate=target_sr,
+                            audio_samples=num_samples,
+                            duration_seconds=round(duration_sec, 2),
+                            synthesis_seconds=round(synth_time, 3),
+                            message="Аудиосигнал полностью молчаливый (тишина).",
+                        )
+                        continue
+
+                    # Успешная проверка данного голоса
+                    speaker_results[speaker] = SpeakerTestResult(
+                        speaker=speaker,
+                        status="success",
+                        sample_rate=target_sr,
+                        audio_samples=num_samples,
+                        duration_seconds=round(duration_sec, 2),
+                        synthesis_seconds=round(synth_time, 3),
+                        message="Голос успешно проверен.",
+                    )
+
+                except Exception as exc:
+                    logger.warning("Ошибка синтеза для голоса %s: %s", speaker, exc)
+                    failed_speakers.append(speaker)
+                    speaker_results[speaker] = SpeakerTestResult(
+                        speaker=speaker,
+                        status="synth_failed",
+                        message=f"Исключение при синтезе голоса: {exc}",
+                    )
+
+            # Оценка общего допуска модели: ВСЕ обязательные голосы (eugene, xenia) должны пройти!
+            overall_success = True
+            for req in REQUIRED_RUSSIAN_SPEAKERS:
+                if req not in speaker_results or speaker_results[req].status != "success":
+                    overall_success = False
+                    if req not in missing_required_speakers and req in failed_speakers:
+                        pass
+
+            if overall_success:
+                status = "success"
+                msg = f"Smoke-test прошел успешно для обязательных голосов ({', '.join(REQUIRED_RUSSIAN_SPEAKERS)})."
+            else:
+                if missing_required_speakers:
+                    status = "missing_required_speakers"
+                    msg = f"Отсутствуют обязательные голоса: {', '.join(missing_required_speakers)}."
+                else:
+                    status = "synth_failed"
+                    msg = f"Ошибки синтеза обязательных голосов: {', '.join(failed_speakers)}."
 
             return SmokeTestResult(
-                success=True,
-                status="success",
+                success=overall_success,
+                status=status,
                 model_id=model_id,
-                voice=selected_voice,
-                sample_rate=target_sr,
-                audio_duration_sec=round(duration_sec, 2),
+                available_speakers=available_speakers,
+                tested_speakers=tested_speakers,
+                missing_required_speakers=missing_required_speakers,
+                failed_speakers=failed_speakers,
+                speaker_results=speaker_results,
                 load_time_sec=round(load_time, 3),
-                synth_time_sec=round(synth_time, 3),
-                message=f"Smoke-test прошел успешно ({duration_sec:.2f} сек аудио, голос {selected_voice}).",
+                message=msg,
             )
 
         except Exception as exc:
-            logger.warning("Ошибка выполнения smoke-test для модели %s: %s", model_id, exc)
+            logger.warning("Ошибка загрузки модели %s для smoke-test: %s", model_id, exc)
             return SmokeTestResult(
                 success=False,
-                status="synth_failed",
+                status="load_failed",
                 model_id=model_id,
-                voice=voice,
-                load_time_sec=time.monotonic() - start_load,
-                message=f"Исключение при синтезе smoke-test: {exc}",
+                available_speakers=[],
+                tested_speakers=[],
+                missing_required_speakers=REQUIRED_RUSSIAN_SPEAKERS,
+                failed_speakers=REQUIRED_RUSSIAN_SPEAKERS,
+                speaker_results={},
+                load_time_sec=round(time.monotonic() - start_load, 3),
+                message=f"Исключение при загрузке модели: {exc}",
             )
 
     def activate_model(
         self,
         model_id: str,
+        voice: Optional[str] = None,
         dry_run: bool = False,
         force: bool = False,
         skip_smoke_test: bool = False,
     ) -> SwitchResult:
-        """Активация модели с обязательным предварительным smoke-test и атомарной записью."""
+        """Активация модели с обязательным предварительным smoke-test всех обязательных голосов."""
         active_model = self.model_manager.get_active_model()
         current_active_id = active_model.model_id if active_model else None
 
-        # 1. Сначала выполняем валидацию целевой модели
+        # 1. Валидация целевой модели
         valid, err_status, model_info = self.validate_model_for_switch(model_id)
         if not valid:
             self.log_switch_event(
@@ -400,7 +504,7 @@ class ModelSwitcher:
                 dry_run=dry_run,
             )
 
-        # 2. Изолированный smoke-test
+        # 2. Изолированный smoke-test (eugene + xenia)
         smoke_res = None
         if not skip_smoke_test:
             smoke_res = self.run_smoke_test(model_id)
@@ -425,7 +529,22 @@ class ModelSwitcher:
                     dry_run=dry_run,
                 )
 
-        # 3. Dry-run режим
+        # 3. Проверка выбранного пользователем голоса (не менять выбранный голос молча!)
+        if voice and smoke_res and smoke_res.available_speakers:
+            if voice not in smoke_res.available_speakers and not force:
+                return SwitchResult(
+                    success=False,
+                    status="voice_missing",
+                    model_id=model_id,
+                    previous_model_id=current_active_id,
+                    installed_path=model_info.path,
+                    active=False,
+                    smoke_test=smoke_res,
+                    message=f"Выбранный пользователем голос '{voice}' отсутствует в новой модели '{model_id}'. Автоматическая подмена запрещена.",
+                    dry_run=dry_run,
+                )
+
+        # 4. Dry-run режим
         if dry_run:
             return SwitchResult(
                 success=True,
@@ -439,8 +558,7 @@ class ModelSwitcher:
                 dry_run=True,
             )
 
-        # 4. Атомарное переключение метаданных
-        # Обновляем metadata.json старой модели (active=false)
+        # 5. Атомарное переключение метаданных
         if active_model and active_model.path and not active_model.is_legacy:
             try:
                 old_dir = Path(active_model.path).parent
@@ -456,7 +574,6 @@ class ModelSwitcher:
             except Exception as exc:
                 logger.warning("Ошибка обнуления флага active у старой модели: %s", exc)
 
-        # Обновляем metadata.json новой модели (active=true)
         new_dir = Path(model_info.path).parent
         new_meta_file = new_dir / "metadata.json"
         try:
@@ -514,7 +631,6 @@ class ModelSwitcher:
 
         previous_id = state.get("previous_model_id")
         if not previous_id:
-            # Ищем из журнала событий
             if self.history_log_file.is_file():
                 try:
                     lines = self.history_log_file.read_text(encoding="utf-8").strip().splitlines()
@@ -538,7 +654,6 @@ class ModelSwitcher:
                 dry_run=dry_run,
             )
 
-        # Вызываем активацию предыдущей модели
         switch_res = self.activate_model(
             model_id=previous_id,
             dry_run=dry_run,
