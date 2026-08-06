@@ -34,6 +34,13 @@ def main():
         model_manager_main()
         return
 
+    if len(sys.argv) > 1 and sys.argv[1] in ("check-updates", "--check-updates"):
+        from src.core.update_checker import main as update_checker_main
+
+        sys.argv.pop(1)
+        update_checker_main()
+        return
+
     # Настройка логирования
     log_dir = Path.home() / ".audiobook-generator"
     log_file = log_dir / "audiobook-generator.log"
