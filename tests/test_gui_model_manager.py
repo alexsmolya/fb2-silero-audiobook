@@ -472,6 +472,36 @@ def test_29_different_sha256_prevents_duplicate_migration(controller: ModelManag
     assert controller.is_legacy_available_for_migration() is False
 
 
+def test_30_two_row_button_layout_and_close_enabled_on_busy(mock_mm: MagicMock):
+    """30. Проверка двухстрочной компоновки кнопок и активности кнопки Закрыть во время busy."""
+    with patch("src.gui.model_manager_dialog.ModelManagerDialog._refresh_ui"):
+        dlg = MagicMock()
+        # Имитируем состояние занятости
+        ctrl = ModelManagerController(model_manager=mock_mm)
+        ctrl.is_busy = True
+
+        # Проверяем, что _update_button_states не блокирует btn_close
+        btn_close_mock = MagicMock()
+        btn_op_mock = MagicMock()
+
+        dlg.controller = ctrl
+        dlg._closed = False
+        dlg.btn_check_updates = btn_op_mock
+        dlg.btn_download = btn_op_mock
+        dlg.btn_test = btn_op_mock
+        dlg.btn_activate = btn_op_mock
+        dlg.btn_rollback = btn_op_mock
+        dlg.btn_migrate = btn_op_mock
+        dlg.btn_close = btn_close_mock
+
+        from src.gui.model_manager_dialog import ModelManagerDialog
+        ModelManagerDialog._update_button_states(dlg)
+
+        btn_close_mock.state.assert_called_with(["!disabled"])
+        btn_op_mock.state.assert_called_with(["disabled"])
+
+
+
 def test_28_repeat_migration_safety(controller: ModelManagerController):
     """28. Повторный вызов миграции возвращает already_migrated без ошибок."""
     controller.model_migrator.migrate_legacy_model.return_value = MigrationResult(

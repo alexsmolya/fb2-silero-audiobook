@@ -74,7 +74,13 @@ class ModelManagerDialog(tk.Toplevel):
 
     def _on_close(self) -> None:
         """Безопасное закрытие окна."""
+        if self._closed:
+            return
         self._closed = True
+        try:
+            self.controller.cancel_download()
+        except Exception:
+            pass
         self.grab_release()
         self.destroy()
 
@@ -144,29 +150,37 @@ class ModelManagerDialog(tk.Toplevel):
         self.btn_cancel_op = ttk.Button(self.progress_frame, text="Отменить", command=self._cancel_download)
         self.btn_cancel_op.pack(anchor="e")
 
-        # 4. Панель кнопок управления
+        # 4. Панель кнопок управления (две логические строки)
         btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(fill="x", pady=(5, 0))
+        btn_frame.pack(fill="x", pady=(8, 0))
 
-        self.btn_check_updates = ttk.Button(btn_frame, text="Проверить обновления", command=self._check_updates)
+        # Строка 1: Сетевые и диагностические операции
+        row1_frame = ttk.Frame(btn_frame)
+        row1_frame.pack(fill="x", pady=(0, 4))
+
+        self.btn_check_updates = ttk.Button(row1_frame, text="Проверить обновления", command=self._check_updates)
         self.btn_check_updates.pack(side="left", padx=(0, 5))
 
-        self.btn_download = ttk.Button(btn_frame, text="Скачать", command=self._download_model, state="disabled")
+        self.btn_download = ttk.Button(row1_frame, text="Скачать", command=self._download_model, state="disabled")
         self.btn_download.pack(side="left", padx=5)
 
-        self.btn_test = ttk.Button(btn_frame, text="Проверить модель", command=self._smoke_test, state="disabled")
+        self.btn_test = ttk.Button(row1_frame, text="Проверить модель", command=self._smoke_test, state="disabled")
         self.btn_test.pack(side="left", padx=5)
 
-        self.btn_activate = ttk.Button(btn_frame, text="Активировать", command=self._activate_model, state="disabled")
-        self.btn_activate.pack(side="left", padx=5)
+        # Строка 2: Управление состоянием модели и закрытие
+        row2_frame = ttk.Frame(btn_frame)
+        row2_frame.pack(fill="x")
 
-        self.btn_rollback = ttk.Button(btn_frame, text="Откатить", command=self._rollback_model, state="disabled")
+        self.btn_activate = ttk.Button(row2_frame, text="Активировать", command=self._activate_model, state="disabled")
+        self.btn_activate.pack(side="left", padx=(0, 5))
+
+        self.btn_rollback = ttk.Button(row2_frame, text="Откатить", command=self._rollback_model, state="disabled")
         self.btn_rollback.pack(side="left", padx=5)
 
-        self.btn_migrate = ttk.Button(btn_frame, text="Перенести модель", command=self._migrate_legacy, state="disabled")
+        self.btn_migrate = ttk.Button(row2_frame, text="Перенести модель", command=self._migrate_legacy, state="disabled")
         self.btn_migrate.pack(side="left", padx=5)
 
-        self.btn_close = ttk.Button(btn_frame, text="Закрыть", command=self._on_close)
+        self.btn_close = ttk.Button(row2_frame, text="Закрыть", command=self._on_close)
         self.btn_close.pack(side="right")
 
         self._full_sha256 = ""
@@ -245,8 +259,10 @@ class ModelManagerDialog(tk.Toplevel):
             self.btn_activate.state(["disabled"])
             self.btn_rollback.state(["disabled"])
             self.btn_migrate.state(["disabled"])
+            self.btn_close.state(["!disabled"])
             return
 
+        self.btn_close.state(["!disabled"])
         self.btn_check_updates.state(["!disabled"])
 
         # Проверяем, есть ли обновление для скачивания
