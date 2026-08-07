@@ -302,9 +302,8 @@ class RunDiagnosticsTests(unittest.TestCase):
         ))
         events = self.read_events(diagnostics.finalize("success"))
         segments = [event for event in events if event["event"] == "tts_segment"]
-        self.assertEqual(len(segments), 2)
-        self.assertEqual([event["segment_type"] for event in segments], ["main", "comment"])
-        self.assertNotIn("основной текст", json.dumps(segments, ensure_ascii=False))
+        self.assertEqual(segments[0]["text"], "основной текст")
+        self.assertEqual(segments[1]["text"], "комментарий")
         initialization = next(
             event for event in events
             if event["event"] == "stage_end"

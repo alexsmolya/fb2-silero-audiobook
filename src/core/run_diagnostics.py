@@ -351,11 +351,52 @@ class RunDiagnostics:
         status: str = "success",
         error: Optional[str] = None,
         text_excerpt: Optional[str] = None,
+        text: Optional[str] = None,
+        boundary_before: Optional[str] = None,
+        boundary_after: Optional[str] = None,
     ) -> None:
         info = dict(audio_info or {})
         duration = _positive_float(info.get("duration_seconds"))
         wall = max(0.0, float(wall_seconds))
-        chars = max(0, int(characters))
+        chars = len(text) if text is not None else max(0, int(characters))
+
+        if text is not None:
+            if boundary_before is None:
+                boundary_before = (
+                    "start_of_chapter" if segment_index == 1
+                    else "paragraph_break" if text.startswith("\n")
+                    else "dash" if text.lstrip().startswith(("—", "-"))
+                    else "sentence_continuation"
+                )
+            if boundary_after is None:
+                t = text.rstrip().rstrip('»"\'”)]}')
+                if not t:
+                    boundary_after = "space" if text and text[-1].isspace() else "none"
+                elif t.endswith("...") or t.endswith("…"):
+                    boundary_after = "..."
+                elif t.endswith("?!") or t.endswith("!?"):
+                    boundary_after = "?!"
+                elif t.endswith("?"):
+                    boundary_after = "?"
+                elif t.endswith("!"):
+                    boundary_after = "!"
+                elif t.endswith("."):
+                    boundary_after = "."
+                elif t.endswith(","):
+                    boundary_after = ","
+                elif t.endswith(";"):
+                    boundary_after = ";"
+                elif t.endswith(":"):
+                    boundary_after = ":"
+                elif t.endswith("—") or t.endswith("-"):
+                    boundary_after = "dash"
+                elif text.endswith("\n"):
+                    boundary_after = "paragraph_break"
+                elif text[-1].isspace():
+                    boundary_after = "space"
+                else:
+                    boundary_after = "none"
+
         with self._lock:
             if self._closed or self._finalizing:
                 return
@@ -386,6 +427,12 @@ class RunDiagnostics:
             "outcome": status,
             "error": error,
         }
+        if text is not None:
+            fields["text"] = text
+        if boundary_before is not None:
+            fields["boundary_before"] = boundary_before
+        if boundary_after is not None:
+            fields["boundary_after"] = boundary_after
         if status != "success" and text_excerpt:
             fields["text_excerpt"] = text_excerpt[:80]
         self.emit("tts_segment", **fields)

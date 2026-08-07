@@ -266,6 +266,7 @@ class TTSManager:
                         if segment_outcome != "success"
                         else None
                     ),
+                    text=planned_text,
                 )
                 if publish_initialization:
                     diagnostics.emit(
@@ -380,6 +381,7 @@ class TTSManager:
                 status=failure_outcome,
                 error=str(exc)[:300],
                 text_excerpt=planned_text[:80],
+                text=planned_text,
             )
             if publish_initialization:
                 diagnostics.emit(
