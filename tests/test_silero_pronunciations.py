@@ -147,6 +147,28 @@ class SileroPronunciationTests(unittest.TestCase):
         self.assertEqual(apply_pronunciations("Глава 7", rules), "Глава седьмая")
         self.assertEqual(apply_pronunciations("Глава 22", rules), "Глава двадцать вторая")
 
+    def test_missing_custom_file_falls_back_to_project_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "missing.toml"
+            rules = load_pronunciations(path)
+            self.assertTrue(len(rules) > 0)
+
+    def test_invalid_custom_toml_keeps_project_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "invalid.toml"
+            path.write_text('[ru\n"глаза" = "глаз+а"', encoding="utf-8")
+            with self.assertLogs("src.core.tts_silero", level="WARNING") as logs:
+                rules = load_pronunciations(path)
+            self.assertTrue(len(rules) > 0)
+            self.assertIn("не удалось загрузить словарь", " ".join(logs.output))
+
+    def test_custom_rules_override_project_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "custom.toml"
+            path.write_text('[ru]\n"Паша" = "Паш+а"\n', encoding="utf-8")
+            rules = load_pronunciations(path)
+            self.assertEqual(apply_pronunciations("Паша", rules), "Паш+а")
+
 
 if __name__ == "__main__":
     unittest.main()
