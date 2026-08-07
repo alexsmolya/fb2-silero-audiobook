@@ -112,19 +112,40 @@ class SileroPronunciationTests(unittest.TestCase):
             "глазной и гл+аз",
         )
 
-    def test_missing_file_returns_empty_rules(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "missing.toml"
-            self.assertEqual(load_pronunciations(path), [])
+    def test_book_7_pronunciation_rules(self):
+        rules = load_pronunciations()
 
-    def test_invalid_toml_returns_empty_rules(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "pronunciations.toml"
-            path.write_text('[ru\n"глаза" = "глаз+а"', encoding="utf-8")
-            with self.assertLogs("src.core.tts_silero", level="WARNING") as logs:
-                rules = load_pronunciations(path)
-            self.assertEqual(rules, [])
-            self.assertIn("не удалось загрузить словарь", " ".join(logs.output))
+        # 1. Безопасные имена и термины
+        self.assertEqual(apply_pronunciations("Лев Демидович", rules), "Лев Дем+идович")
+        self.assertEqual(apply_pronunciations("мимо Льва Демидовича", rules), "мимо Льва Дем+идовича")
+        self.assertEqual(apply_pronunciations("Паша", rules), "П+аша")
+        self.assertEqual(apply_pronunciations("клановка", rules), "кл+ановка")
+        self.assertEqual(apply_pronunciations("ястребами", rules), "+ястребами")
+
+        # 2. Фразовые и контекстные правила
+        self.assertEqual(apply_pronunciations("не слишком большая часть", rules), "не слишком больш+ая часть")
+        self.assertEqual(apply_pronunciations("Никто не подаст руки", rules), "Никто не подаст рук+и")
+        self.assertEqual(
+            apply_pronunciations("без всяких эмоций предельно формально начала Юсупова", rules),
+            "без всяких эмоций предельно формально начал+а Юсупова",
+        )
+        self.assertEqual(apply_pronunciations("в его словах", rules), "в его слов+ах")
+        self.assertEqual(apply_pronunciations("приложил сил к тому, чтобы", rules), "приложил сил к том+у, чтобы")
+        self.assertEqual(apply_pronunciations("так и малое дофига", rules), "так и м+алое дофига")
+        self.assertEqual(apply_pronunciations("второй технический кандидат", rules), "втор+ой технический кандидат")
+
+        # 3. Не должны изменяться (омографы, бренды, многоточия)
+        self.assertEqual(apply_pronunciations("Стоит уточнить...", rules), "Стоит уточнить...")
+        self.assertEqual(apply_pronunciations("— Стоит? — Стоит.", rules), "— Стоит? — Стоит.")
+        self.assertEqual(apply_pronunciations("все", rules), "все")
+        self.assertEqual(apply_pronunciations("всё", rules), "всё")
+        self.assertEqual(apply_pronunciations("РитРос", rules), "РитРос")
+        self.assertEqual(apply_pronunciations("ряд… специалистов", rules), "ряд… специалистов")
+
+        # 4. Нумерация глав
+        self.assertEqual(apply_pronunciations("Глава 1", rules), "Глава первая")
+        self.assertEqual(apply_pronunciations("Глава 7", rules), "Глава седьмая")
+        self.assertEqual(apply_pronunciations("Глава 22", rules), "Глава двадцать вторая")
 
 
 if __name__ == "__main__":

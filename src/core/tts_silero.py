@@ -26,6 +26,7 @@ from src.core.tts_base import TTSBackend
 
 logger = logging.getLogger(__name__)
 
+PROJECT_PRONUNCIATIONS_PATH = Path(__file__).resolve().parent.parent.parent / "pronunciations.toml"
 PRONUNCIATIONS_PATH = Path.home() / ".audiobook-generator" / "pronunciations.toml"
 PronunciationRule = Tuple[Pattern[str], str]
 
@@ -57,42 +58,38 @@ EDGE_PREFIX_TO_LANG = {
 
 
 def load_pronunciations(
-    path: Path = PRONUNCIATIONS_PATH,
+    path: Optional[Path] = None,
 ) -> List[PronunciationRule]:
     """Загрузить и скомпилировать русский словарь произношений Silero."""
-    try:
-        with path.open("rb") as file:
-            data = tomllib.load(file)
-    except FileNotFoundError:
-        return []
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        logger.warning(
-            "Silero: не удалось загрузить словарь произношений %s: %s. "
-            "Синтез продолжится без пользовательских замен.",
-            path,
-            exc,
-        )
-        return []
+    merged_ru_entries: Dict[str, str] = {}
 
-    ru_entries = data.get("ru", {})
-    if not isinstance(ru_entries, dict):
-        logger.warning(
-            "Silero: секция [ru] в словаре произношений %s должна быть таблицей. "
-            "Синтез продолжится без пользовательских замен.",
-            path,
-        )
-        return []
+    paths_to_load: List[Path] = []
+    if PROJECT_PRONUNCIATIONS_PATH.exists():
+        paths_to_load.append(PROJECT_PRONUNCIATIONS_PATH)
+
+    custom_path = Path(path) if path is not None else PRONUNCIATIONS_PATH
+    if custom_path not in paths_to_load and custom_path.exists():
+        paths_to_load.append(custom_path)
+
+    for p in paths_to_load:
+        try:
+            with p.open("rb") as file:
+                data = tomllib.load(file)
+            ru_entries = data.get("ru", {})
+            if isinstance(ru_entries, dict):
+                for source, replacement in ru_entries.items():
+                    if source and isinstance(replacement, str):
+                        merged_ru_entries[source] = replacement
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            logger.warning(
+                "Silero: не удалось загрузить словарь произношений %s: %s",
+                p,
+                exc,
+            )
 
     rules: List[PronunciationRule] = []
-    entries = sorted(ru_entries.items(), key=lambda item: len(item[0]), reverse=True)
+    entries = sorted(merged_ru_entries.items(), key=lambda item: len(item[0]), reverse=True)
     for source, replacement in entries:
-        if not source or not isinstance(replacement, str):
-            logger.warning(
-                "Silero: пропущено некорректное правило произношения %r в %s",
-                source,
-                path,
-            )
-            continue
         pattern = re.compile(
             rf"(?<!\w){re.escape(source)}(?!\w)",
             flags=re.IGNORECASE,

@@ -352,6 +352,7 @@ class RunDiagnostics:
         error: Optional[str] = None,
         text_excerpt: Optional[str] = None,
         text: Optional[str] = None,
+        text_for_tts: Optional[str] = None,
         boundary_before: Optional[str] = None,
         boundary_after: Optional[str] = None,
     ) -> None:
@@ -429,6 +430,8 @@ class RunDiagnostics:
         }
         if text is not None:
             fields["text"] = text
+        if text_for_tts is not None and text_for_tts != text:
+            fields["text_for_tts"] = text_for_tts
         if boundary_before is not None:
             fields["boundary_before"] = boundary_before
         if boundary_after is not None:
