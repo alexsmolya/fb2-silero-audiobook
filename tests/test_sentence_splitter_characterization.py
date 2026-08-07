@@ -133,6 +133,27 @@ class TestSentenceSplitterCharacterization(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0], text)
 
+    def test_10_ellipsis_proper_name_limitation(self):
+        """10. Ограничение эвристики: имена собственные после внутреннего многоточия."""
+        # Фиксируем компромиссное поведение fallback-сегментатора:
+        # Поскольку эвристика проверяет заглавную букву после многоточия,
+        # имена собственные воспринимаются как начало нового предложения.
+        c1 = "Он посмотрел на… Павла, стоявшего у двери."
+        r1 = self.splitter.split(c1, lang="ru")
+        self.assertEqual(len(r1), 2)
+        self.assertEqual(r1[0], "Он посмотрел на…")
+        self.assertEqual(r1[1], "Павла, стоявшего у двери.")
+
+        c2 = "Больше всего он боялся… Волконского, разумеется."
+        r2 = self.splitter.split(c2, lang="ru")
+        self.assertEqual(len(r2), 2)
+
+        c3 = "Он замолчал… Павел пожал плечами."
+        r3 = self.splitter.split(c3, lang="ru")
+        self.assertEqual(len(r3), 2)
+        self.assertEqual(r3[0], "Он замолчал…")
+        self.assertEqual(r3[1], "Павел пожал плечами.")
+
 
 if __name__ == "__main__":
     unittest.main()
