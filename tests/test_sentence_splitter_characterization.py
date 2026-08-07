@@ -70,10 +70,51 @@ class TestSentenceSplitterCharacterization(unittest.TestCase):
         self.assertIn("— Куда мы идем?", result[0])
 
     def test_07_ellipsis(self):
-        """7. Многоточие."""
-        text = "Недаром её отец и ряд специалистов считали, что... это было ошибкой."
-        result = self.splitter.split(text, lang="ru")
-        self.assertTrue(len(result) >= 1)
+        """7. Обработка многоточия (консервативные правила для … и ...)."""
+        # Внутреннее многоточие со строчной буквой — НЕ режется
+        t1 = "Недаром его отец и ряд… специалистов клана на полном серьезе рассматривали вариант ликвидации девушки."
+        r1 = self.splitter.split(t1, lang="ru")
+        self.assertEqual(r1, [t1])
+
+        t2 = "Даже этот лощеный… прощелыга говорит правильно."
+        r2 = self.splitter.split(t2, lang="ru")
+        self.assertEqual(r2, [t2])
+
+        t3 = "Он подумал… но ничего не сказал."
+        r3 = self.splitter.split(t3, lang="ru")
+        self.assertEqual(r3, [t3])
+
+        t4 = "Это было странно... но объяснимо."
+        r4 = self.splitter.split(t4, lang="ru")
+        self.assertEqual(r4, [t4])
+
+        # Многоточие на границе предложений перед Заглавной буквой — РЕЖЕТСЯ
+        t5 = "И всем нужны были деньги, влияние, участие в проектах… И никто не смог дать четкий ответ на один простой вопрос."
+        r5 = self.splitter.split(t5, lang="ru")
+        self.assertEqual(len(r5), 2)
+        self.assertEqual(r5[0], "И всем нужны были деньги, влияние, участие в проектах…")
+        self.assertEqual(r5[1], "И никто не смог дать четкий ответ на один простой вопрос.")
+
+        t6 = "Они собирались повести людей в новый мир… Воевода пожал плечами."
+        r6 = self.splitter.split(t6, lang="ru")
+        self.assertEqual(len(r6), 2)
+        self.assertEqual(r6[0], "Они собирались повести людей в новый мир…")
+        self.assertEqual(r6[1], "Воевода пожал плечами.")
+
+        t7 = "Это было странно... Очень странно."
+        r7 = self.splitter.split(t7, lang="ru")
+        self.assertEqual(len(r7), 2)
+        self.assertEqual(r7[0], "Это было странно...")
+        self.assertEqual(r7[1], "Очень странно.")
+
+        # Диалог после многоточия
+        t8 = "Он замолчал… — И что дальше? — спросил Сергей."
+        r8 = self.splitter.split(t8, lang="ru")
+        self.assertEqual(len(r8), 3)
+        self.assertEqual(r8[0], "Он замолчал…")
+        self.assertEqual(r8[1], "— И что дальше?")
+        self.assertEqual(r8[2], "— спросил Сергей.")
+        self.assertEqual(" ".join(r8), t8)
 
     def test_08_dot_without_space(self):
         """8. Точка без пробела (числа, сайты, опечатки)."""
