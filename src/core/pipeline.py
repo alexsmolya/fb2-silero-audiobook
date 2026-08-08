@@ -18,6 +18,7 @@ from typing import Callable, List, Optional, Tuple
 
 from .fb2_parser import FB2Parser, ParsedBook
 from .sentence_splitter import SentenceSplitter
+from .pause_policy import classify_boundary, target_pause
 from .comment_manager import CommentManager, CommentConfig
 from .tts_manager import TTSManager, TTSConfig
 from .audio_assembler import AudioAssembler
@@ -258,11 +259,12 @@ class Pipeline:
                     "sentence_splitting",
                     chapter_index=chapter_num + 1,
                 ):
-                    sentences = self.sentence_splitter.split_chapter(
+                    structured_segments = self.sentence_splitter.split_chapter_segments(
                         chapter.title,
                         chapter.paragraphs,
                         book.metadata.lang,
                     )
+                    sentences = [segment.text for segment in structured_segments]
 
                 if not sentences:
                     logger.warning("Глава %d пуста, пропуск", chapter_num + 1)
@@ -355,6 +357,9 @@ class Pipeline:
                 ):
                     chapter_audio = await self._assemble_chapter_audio(
                         sentences, comments, chapter_dir, chapter_num, cancel_event,
+                        boundary_markers=[
+                            segment.boundary_before for segment in structured_segments
+                        ],
                     )
                 if self.diagnostics is not None:
                     chapter_info = self._audio_info(chapter_audio)
@@ -595,6 +600,7 @@ class Pipeline:
         chapter_dir: Path,
         chapter_num: int,
         cancel_event: Optional[threading.Event] = None,
+        boundary_markers: Optional[List[str]] = None,
     ) -> Path:
         """Сборка аудиофрагментов главы в один файл."""
         segments: List[Tuple[Path, float]] = []
@@ -610,16 +616,30 @@ class Pipeline:
         for i in range(len(sentences)):
             if audio_idx < len(audio_files):
                 # Основной текст
-                segments.append((audio_files[audio_idx], tts_cfg.pause_between_sentences))
+                marker = (
+                    boundary_markers[i]
+                    if boundary_markers is not None and i < len(boundary_markers)
+                    else "chapter_start" if i == 0 else "sentence"
+                )
+                previous_text = sentences[i - 1] if i > 0 else ""
+                boundary = classify_boundary(marker, previous_text, sentences[i])
+                main_target = (
+                    tts_cfg.pause_after_comment
+                    if i > 0 and i - 1 < len(comments) and comments[i - 1]
+                    else target_pause(
+                        boundary, tts_cfg.pause_between_sentences,
+                    )
+                )
+                segments.append((
+                    audio_files[audio_idx],
+                    main_target,
+                ))
                 audio_idx += 1
 
             # Комментарий
             if i < len(comments) and comments[i] and audio_idx < len(audio_files):
                 segments.append((audio_files[audio_idx], tts_cfg.pause_before_comment))
                 audio_idx += 1
-                # Добавляем паузу после комментария к последнему сегменту
-                if segments:
-                    segments[-1] = (segments[-1][0], tts_cfg.pause_after_comment)
 
         chapter_output = self._temp_dir / f"chapter_{chapter_num:04d}_audio.wav"
         return self.audio_assembler.assemble_chapter(

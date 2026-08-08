@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from src.core.audio_assembler import AudioAssembler
+from src.core.pause_policy import EdgeSilence, write_edge_silence
 from src.utils.exceptions import PipelineCanceledError
 
 
@@ -91,6 +92,53 @@ class AudioAssemblerTests(unittest.TestCase):
             "concat=n=5:v=0:a=1[chapter]",
             observed["graph"],
         )
+
+    def test_chapter_adds_only_target_silence_deficit(self):
+        first = self.base / "first.wav"
+        second = self.base / "second.wav"
+        output = self.base / "adaptive.wav"
+        self._write_constant_wav(first, 1000, 0.3)
+        self._write_constant_wav(second, -1000, 0.2)
+        write_edge_silence(first, EdgeSilence(0.0, 0.12))
+        write_edge_silence(second, EdgeSilence(0.08, 0.0))
+
+        assembler = AudioAssembler(sample_rate=22050)
+        assembler.assemble_chapter([(first, 0.0), (second, 0.45)], output)
+
+        # Input audio is 0.5 s; only the 0.25 s target deficit is inserted.
+        self.assertAlmostEqual(assembler.get_audio_duration(output), 0.75, places=3)
+
+    def test_chapter_skips_padding_when_edges_already_meet_target(self):
+        first = self.base / "first.wav"
+        second = self.base / "second.wav"
+        output = self.base / "enough.wav"
+        self._write_constant_wav(first, 1000, 0.2)
+        self._write_constant_wav(second, -1000, 0.2)
+        write_edge_silence(first, EdgeSilence(0.0, 0.25))
+        write_edge_silence(second, EdgeSilence(0.15, 0.0))
+
+        assembler = AudioAssembler(sample_rate=22050)
+        assembler.assemble_chapter([(first, 0.0), (second, 0.30)], output)
+
+        self.assertAlmostEqual(assembler.get_audio_duration(output), 0.4, places=3)
+
+    def test_book_chapter_pause_is_a_separate_final_target(self):
+        first = self.base / "chapter_1.wav"
+        second = self.base / "chapter_2.wav"
+        output = self.base / "book.mp3"
+        self._write_constant_wav(first, 1000, 0.1)
+        self._write_constant_wav(second, -1000, 0.1)
+        write_edge_silence(first, EdgeSilence(0.0, 0.30))
+        write_edge_silence(second, EdgeSilence(0.20, 0.0))
+
+        assembler = AudioAssembler(sample_rate=22050)
+        with patch.object(
+            assembler, "_make_silence", wraps=assembler._make_silence,
+        ) as make_silence:
+            assembler.assemble_book([first, second], output)
+
+        self.assertEqual(make_silence.call_count, 1)
+        self.assertAlmostEqual(make_silence.call_args.args[1], 1.60, places=6)
 
     def test_chapter_cancellation_prevents_ffmpeg(self):
         audio = self.base / "audio.mp3"

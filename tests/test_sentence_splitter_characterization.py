@@ -170,11 +170,29 @@ class TestSentenceSplitterCharacterization(unittest.TestCase):
             lang="ru",
         )
         self.assertEqual(chapter, ["Глава 1 Пролог", "Первый абзац без точки"])
+        structured = self.splitter.split_chapter_segments(
+            "Глава 1",
+            ["Глава 1", "Первое. Второе?", "— Новый абзац."],
+            lang="ru",
+        )
+        self.assertEqual(
+            [(item.text, item.boundary_before) for item in structured],
+            [
+                ("Глава 1", "chapter_start"),
+                ("Первое.", "title_body"),
+                ("Второе?", "sentence"),
+                ("— Новый абзац.", "paragraph"),
+            ],
+        )
 
     def test_12_punctuation_only_fragments_are_not_speech(self):
         for text in ("— …", "…", "—", "?!", "⁈"):
             with self.subTest(text=text):
                 self.assertEqual(self.splitter.split(text, lang="ru"), [])
+        self.assertEqual(
+            self.splitter.split("— ******!", lang="ru"),
+            ["— ******!"],
+        )
 
     def test_13_mixed_terminal_ellipsis_starts_new_sentence(self):
         for terminal in ("?..", "!.."):

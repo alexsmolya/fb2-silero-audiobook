@@ -7,9 +7,16 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from typing import Dict, Callable, List
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class StructuredSegment:
+    text: str
+    boundary_before: str
 
 
 class SentenceSplitter:
@@ -77,6 +84,18 @@ class SentenceSplitter:
         lang: str = "ru",
     ) -> List[str]:
         """Keep a structural title separate, then split body paragraphs."""
+        return [
+            segment.text
+            for segment in self.split_chapter_segments(title, paragraphs, lang)
+        ]
+
+    def split_chapter_segments(
+        self,
+        title: str,
+        paragraphs: List[str],
+        lang: str = "ru",
+    ) -> List[StructuredSegment]:
+        """Split a chapter while retaining structural boundary types."""
         title_parts = [
             " ".join(part.split())
             for part in title.splitlines()
@@ -88,16 +107,50 @@ class SentenceSplitter:
             for paragraph, part in zip(leading, title_parts)
         )
         if not has_structural_title:
-            return self.split_paragraphs(paragraphs, lang)
+            return self._split_body_paragraphs(paragraphs, lang, has_title=False)
 
         title_segments = self.split(" ".join(title_parts), lang)
-        body_segments = self.split_paragraphs(paragraphs[len(title_parts):], lang)
-        return title_segments + body_segments
+        structured = [
+            StructuredSegment(
+                text=text,
+                boundary_before="chapter_start" if index == 0 else "sentence",
+            )
+            for index, text in enumerate(title_segments)
+        ]
+        structured.extend(
+            self._split_body_paragraphs(
+                paragraphs[len(title_parts):], lang, has_title=True,
+            )
+        )
+        return structured
+
+    def _split_body_paragraphs(
+        self,
+        paragraphs: List[str],
+        lang: str,
+        *,
+        has_title: bool,
+    ) -> List[StructuredSegment]:
+        structured: List[StructuredSegment] = []
+        for paragraph_index, paragraph in enumerate(paragraphs):
+            for sentence_index, text in enumerate(self.split(paragraph, lang)):
+                if sentence_index > 0:
+                    boundary = "sentence"
+                elif paragraph_index == 0 and has_title:
+                    boundary = "title_body"
+                elif paragraph_index == 0 and not structured:
+                    boundary = "chapter_start"
+                else:
+                    boundary = "paragraph"
+                structured.append(StructuredSegment(text, boundary))
+        return structured
 
     @staticmethod
     def has_speech_content(text: str) -> bool:
         """Return whether a fragment contains something pronounceable."""
-        return any(character.isalnum() for character in text)
+        return any(character.isalnum() for character in text) or bool(
+            re.search(r"\*{2,}|\*(?:-\*)+", text)
+        )
 
     def _load_spacy_ru(self):
         """Загрузка spacy модели для русского языка."""

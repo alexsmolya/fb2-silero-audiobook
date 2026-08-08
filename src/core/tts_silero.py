@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Pattern, Tuple
 
 from src.core.tts_base import TTSBackend
+from src.core.pause_policy import measure_wav_edge_silence, write_edge_silence
 
 logger = logging.getLogger(__name__)
 
@@ -452,12 +453,16 @@ class SileroTTSManager(TTSBackend):
                 await self._generate_silence_mp3(mp3_path, duration_sec=0.5)
                 return mp3_path
 
+            edge_silence = measure_wav_edge_silence(wav_path)
+
         except Exception as e:
             logger.error("Silero ошибка синтеза: %s", e)
             raise RuntimeError(f"Silero TTS ошибка: {e}") from e
 
         # Конвертируем WAV → MP3 с учётом скорости
         await self._adjust_speed(wav_path, speed, mp3_path)
+        if edge_silence is not None:
+            write_edge_silence(mp3_path, edge_silence.scaled_for_speed(speed))
 
         # Удаляем промежуточный WAV
         if wav_path.exists():

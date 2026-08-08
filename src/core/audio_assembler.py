@@ -19,6 +19,13 @@ from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 from src.utils.exceptions import PipelineCanceledError
+from src.core.pause_policy import (
+    CHAPTER_TARGET_FINAL_SILENCE,
+    measure_wav_edge_silence,
+    read_edge_silence,
+    required_padding,
+    write_edge_silence,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -169,8 +176,11 @@ class AudioAssembler:
             concat_inputs: List[str] = []
             input_index = 0
 
-            for idx, (audio_path, pause) in enumerate(segments):
+            previous_edge = None
+            for idx, (audio_path, target) in enumerate(segments):
                 self._check_canceled(cancel_event)
+                current_edge = read_edge_silence(audio_path)
+                pause = required_padding(target, previous_edge, current_edge)
                 if pause > 0:
                     pause_label = f"pause_{idx}"
                     filters.append(
@@ -193,6 +203,7 @@ class AudioAssembler:
                 )
                 concat_inputs.append(f"[{audio_label}]")
                 input_index += 1
+                previous_edge = current_edge
 
             if not concat_inputs:
                 raise FileNotFoundError("Нет ни одного валидного аудиофайла для склейки главы")
@@ -217,6 +228,9 @@ class AudioAssembler:
         self._check_canceled(cancel_event)
         # Получаем длительность через ffprobe
         duration = self.get_audio_duration(output_path)
+        chapter_edge = measure_wav_edge_silence(output_path)
+        if chapter_edge is not None:
+            write_edge_silence(output_path, chapter_edge)
         logger.info("Глава сохранена: %s (%.1f сек)", output_path, duration)
         return output_path
 
@@ -224,7 +238,7 @@ class AudioAssembler:
         self,
         chapter_paths: List[Path],
         output_path: Path,
-        chapter_pause: float = 1.5,
+        chapter_pause: float = CHAPTER_TARGET_FINAL_SILENCE,
         progress_callback: Optional[Callable[[int, int], None]] = None,
         cancel_event: Optional[threading.Event] = None,
     ) -> Path:
@@ -233,7 +247,7 @@ class AudioAssembler:
         Args:
             chapter_paths: Список путей к аудиофайлам глав.
             output_path: Путь для сохранения финального MP3.
-            chapter_pause: Пауза между главами в секундах.
+            chapter_pause: Целевая итоговая пауза между главами в секундах.
             progress_callback: Колбэк прогресса (текущая глава, всего).
 
         Returns:
@@ -249,12 +263,20 @@ class AudioAssembler:
             tmp_root = Path(tmp_dir)
             file_list_paths: List[Path] = []
             total = len(chapter_paths)
+            previous_edge = None
 
             for i, chapter_path in enumerate(chapter_paths):
                 self._check_canceled(cancel_event)
-                if i > 0 and chapter_pause > 0:
+                current_edge = read_edge_silence(chapter_path)
+                pause = required_padding(
+                    chapter_pause,
+                    previous_edge,
+                    current_edge,
+                    fallback_padding=1.5,
+                )
+                if i > 0 and pause > 0:
                     silence_path = tmp_root / f"pause_{i}.wav"
-                    self._make_silence(silence_path, chapter_pause, cancel_event)
+                    self._make_silence(silence_path, pause, cancel_event)
                     file_list_paths.append(silence_path)
 
                 if not chapter_path.exists():
@@ -262,6 +284,7 @@ class AudioAssembler:
                     continue
 
                 file_list_paths.append(chapter_path)
+                previous_edge = current_edge
 
                 if progress_callback:
                     progress_callback(i + 1, total)
