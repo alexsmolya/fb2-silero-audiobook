@@ -71,9 +71,8 @@ class AudioAssemblerTests(unittest.TestCase):
         assembler.sample_rate = 22050
 
         def capture(args, cancel_event=None):
-            script = Path(args[args.index("-filter_complex_script") + 1])
             observed["args"] = args
-            observed["graph"] = script.read_text(encoding="utf-8")
+            observed["graph"] = args[args.index("-filter_complex") + 1]
             output.write_bytes(b"chapter")
 
         assembler._run_ffmpeg = capture

@@ -175,7 +175,26 @@ class FB2Parser:
             if text:
                 chapter.paragraphs.append(text)
 
+        # ElementTree's descendant search includes <title><p>...</p></title>.
+        # Some FB2 producers also repeat that same heading as the first body
+        # paragraph.  Keep one spoken heading, but do not deduplicate ordinary
+        # repeated paragraphs or headings repeated later in the chapter.
+        if chapter.title and len(chapter.paragraphs) > 1:
+            normalized_title = self._normalize_heading(chapter.title)
+            duplicate_end = 0
+            for paragraph in chapter.paragraphs:
+                if self._normalize_heading(paragraph) != normalized_title:
+                    break
+                duplicate_end += 1
+            if duplicate_end > 1:
+                del chapter.paragraphs[1:duplicate_end]
+
         return chapter
+
+    @staticmethod
+    def _normalize_heading(text: str) -> str:
+        """Normalize insignificant whitespace/case for heading comparison."""
+        return " ".join(text.split()).casefold()
 
     def _get_text(self, element: ET.Element, tag: str, ns: dict) -> str:
         """Получение текста из дочернего элемента."""

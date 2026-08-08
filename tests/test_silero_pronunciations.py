@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ from src.core.tts_silero import (
     SILERO_RU_MODEL_ID,
     SileroTTSManager,
     apply_pronunciations,
+    harden_silero_ru_preprocessing,
     load_pronunciations,
 )
 
@@ -33,6 +35,28 @@ class SileroPronunciationTests(unittest.TestCase):
         ) as loader:
             SileroTTSManager(config)
         loader.assert_called_once_with()
+
+    def test_hardens_broken_silero_abbreviation_patterns(self):
+        language_data = {
+            "ru": {
+                "patterns": [
+                    (r"д.\s*н.\s*э.", " до нашей эры"),
+                    (r"н.\s*э.", " нашей эры"),
+                ],
+            },
+        }
+
+        harden_silero_ru_preprocessing(language_data)
+
+        def preprocess(text: str) -> str:
+            for pattern, replacement in language_data["ru"]["patterns"]:
+                text = re.sub(pattern, replacement, text)
+            return text
+
+        self.assertEqual(preprocess("на этот вопрос"), "на этот вопрос")
+        self.assertEqual(preprocess("на эшафот"), "на эшафот")
+        self.assertEqual(preprocess("в 44 г. до н. э."), "в 44 г. до  нашей эры")
+        self.assertEqual(preprocess("в н.э."), "в  нашей эры")
 
     def test_russian_wrapper_uses_v5_5_with_eugene(self):
         config = SimpleNamespace(main_voice="eugene", comment_voice="xenia")
@@ -134,15 +158,36 @@ class SileroPronunciationTests(unittest.TestCase):
         self.assertEqual(apply_pronunciations("так и малое дофига", rules), "так и м+алое дофига")
         self.assertEqual(apply_pronunciations("второй технический кандидат", rules), "втор+ой технический кандидат")
 
-        # 3. Не должны изменяться (омографы, бренды, многоточия)
+        # 3. Подтверждённые контекстные ударения
+        self.assertEqual(
+            apply_pronunciations("под это определение не попадало никак", rules),
+            "под это определение не попад+ало никак",
+        )
+        self.assertEqual(
+            apply_pronunciations("Причем испугался он явно не боли.", rules),
+            "Причем испугался он явно не б+оли.",
+        )
+        self.assertEqual(
+            apply_pronunciations("с удовольствием глотнув свежей и на удивление вкусной воды", rules),
+            "с удовольствием глотнув свежей и на удивление вкусной вод+ы",
+        )
+        self.assertEqual(
+            apply_pronunciations("вывести из «заморозки»", rules),
+            "вывести из «замор+озки»",
+        )
+
+        # 4. Не должны изменяться (омографы, бренды, многоточия и омографы выше)
         self.assertEqual(apply_pronunciations("Стоит уточнить...", rules), "Стоит уточнить...")
         self.assertEqual(apply_pronunciations("— Стоит? — Стоит.", rules), "— Стоит? — Стоит.")
         self.assertEqual(apply_pronunciations("все", rules), "все")
         self.assertEqual(apply_pronunciations("всё", rules), "всё")
         self.assertEqual(apply_pronunciations("РитРос", rules), "РитРос")
         self.assertEqual(apply_pronunciations("ряд… специалистов", rules), "ряд… специалистов")
+        self.assertEqual(apply_pronunciations("яблоко попадало с дерева", rules), "яблоко попадало с дерева")
+        self.assertEqual(apply_pronunciations("Боли сильнее!", rules), "Боли сильнее!")
+        self.assertEqual(apply_pronunciations("минеральные воды", rules), "минеральные воды")
 
-        # 4. Нумерация глав
+        # 5. Нумерация глав
         self.assertEqual(apply_pronunciations("Глава 1", rules), "Глава первая")
         self.assertEqual(apply_pronunciations("Глава 7", rules), "Глава седьмая")
         self.assertEqual(apply_pronunciations("Глава 22", rules), "Глава двадцать вторая")

@@ -49,12 +49,33 @@ DEFAULT_SILERO_VOICES = {
 }
 SILERO_RU_MODEL_ID = "v5_5_ru"
 
+# silero-tts 0.0.5 ships these abbreviation regexes with unescaped dots,
+# so ordinary text such as "на этот" becomes "нашей эрыот".
+_BROKEN_RU_ABBREVIATION_PATTERNS = {
+    r"д.\s*н.\s*э.": r"(?<!\w)д\.\s*н\.\s*э\.(?!\w)",
+    r"н.\s*э.": r"(?<!\w)н\.\s*э\.(?!\w)",
+}
+
 # Маппинг Edge TTS префиксов → язык Silero
 EDGE_PREFIX_TO_LANG = {
     "ru-RU": "ru",
     "en-US": "en",
     "en-GB": "en",
 }
+
+
+def harden_silero_ru_preprocessing(language_data: Optional[dict] = None) -> None:
+    """Correct unsafe abbreviation regexes in the installed Silero wrapper."""
+    if language_data is None:
+        from silero_tts.lang_data import lang_data
+
+        language_data = lang_data
+
+    ru_patterns = language_data.get("ru", {}).get("patterns", [])
+    language_data["ru"]["patterns"] = [
+        (_BROKEN_RU_ABBREVIATION_PATTERNS.get(pattern, pattern), replacement)
+        for pattern, replacement in ru_patterns
+    ]
 
 
 def load_pronunciations(
@@ -166,6 +187,8 @@ class SileroTTSManager(TTSBackend):
                 import torch
                 from silero_tts.silero_tts import SileroTTS
                 from src.core.model_manager import ModelManager
+
+                harden_silero_ru_preprocessing()
 
                 mm = ModelManager()
                 active_meta = mm.get_active_model()

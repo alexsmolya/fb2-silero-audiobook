@@ -201,13 +201,12 @@ class AudioAssembler:
                 "".join(concat_inputs)
                 + f"concat=n={len(concat_inputs)}:v=0:a=1[chapter]"
             )
-            filter_script = tmp_root / "filter_complex.txt"
-            filter_script.write_text(";\n".join(filters), encoding="utf-8")
+            filter_graph = ";\n".join(filters)
 
             self._check_canceled(cancel_event)
             self._run_ffmpeg([
                 *input_args,
-                "-filter_complex_script", str(filter_script),
+                "-filter_complex", filter_graph,
                 "-map", "[chapter]",
                 "-acodec", "pcm_s16le",
                 "-ac", "1",
