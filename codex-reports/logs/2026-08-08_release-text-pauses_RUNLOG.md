@@ -126,6 +126,14 @@ ordinary `0.30`, question `0.45`, exclamation `0.38`, ellipsis `0.45`, dialogue
 ## Git publication
 
 Release REPORT, RUNLOG, and `LATEST.md` were added on `main` after functional
-verification. The documentation commit and final pointer commit are recorded
-in `LATEST.md`. Publication uses only an ordinary push to `origin/main`; no PR,
-force-push, branch deletion, or automatic merge operation is involved.
+verification.
+
+```text
+git push origin main
+```
+
+Exit `0`; GitHub reported `514e331..3ff15eb main -> main`. The REPORT/RUNLOG
+were then updated with that observed result. Their exact documentation commit
+and the final pointer commit are recorded in `LATEST.md`. Publication uses only
+ordinary pushes to `origin/main`; no PR, force-push, branch deletion, or
+automatic merge operation is involved.

@@ -118,5 +118,6 @@ Recommended next step: use the updated launcher for normal listening and log
 specific pronunciation/prosody cases for a later evidence-based task. Do not
 replace them globally without accumulated examples.
 
-Push target: `origin/main` by ordinary non-force push. Push status and final
-documentation pointer are recorded in `codex-reports/LATEST.md`.
+Push target: `origin/main` by ordinary non-force push. The first publication
+advanced it from `514e331` to `3ff15eb` successfully; the final report status
+and exact documentation pointer are recorded in `codex-reports/LATEST.md`.
