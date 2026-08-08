@@ -7,7 +7,7 @@
 - Engineering commits: `345320389e2b9ee584ae4b81145e8dfa5a985947`,
   `8c56f34f7c2e1de5f63743a0ab5f3f48e18826c9`
 - Integration head: `1eaaf00026eea7aecb8da8d8afab86908637914b`
-- Release documentation commit: `PENDING_FINAL_REPORT_COMMIT`
+- Release documentation commit: `bd4fd86447298cec6892cf713070240411cc7720`
 - First published main head: `3ff15eb16afdb47e60a99b7a83fd8c692ca2d849`
 - Status: complete; ordinary `origin/main` push confirmed successful
 - Timestamp: `2026-08-08T16:38:14+02:00`
