@@ -280,6 +280,10 @@ FB2 Silero Audiobook is a Russian ebook audiobook generator for Linux. FB2 works
 
 The verified speech scope remains Russian books on Linux with Silero `v5_5_ru`, `eugene`, and `xenia`. PDF, DjVu, comics, Windows, macOS, Edge TTS, Piper, Supertonic, and en/ja/zh are not verified as supported in this release.
 
+## Technical findings
+
+See [Russian TTS findings from real-world audiobook generation](docs/upstream-findings/README.md) for compact upstream-oriented reproductions, root causes, fixes, and verification notes.
+
 ## Проверка разработки
 
 ```fish
