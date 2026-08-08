@@ -193,8 +193,10 @@ class FB2Parser:
 
     @staticmethod
     def _normalize_heading(text: str) -> str:
-        """Normalize insignificant whitespace/case for heading comparison."""
-        return " ".join(text.split()).casefold()
+        """Normalize only insignificant heading decoration for comparison."""
+        normalized = " ".join(text.split())
+        normalized = re.sub(r"^[\s.·•]+", "", normalized)
+        return normalized.casefold()
 
     def _get_text(self, element: ET.Element, tag: str, ns: dict) -> str:
         """Получение текста из дочернего элемента."""

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.core.tts_silero import (
     SILERO_RU_MODEL_ID,
@@ -16,6 +16,7 @@ from src.core.tts_silero import (
     apply_pronunciations,
     harden_silero_ru_preprocessing,
     load_pronunciations,
+    prepare_silero_text,
 )
 
 
@@ -213,6 +214,57 @@ class SileroPronunciationTests(unittest.TestCase):
             path.write_text('[ru]\n"Паша" = "Паш+а"\n', encoding="utf-8")
             rules = load_pronunciations(path)
             self.assertEqual(apply_pronunciations("Паша", rules), "Паш+а")
+
+    def test_masked_asterisks_are_protected_from_wrapper(self):
+        self.assertEqual(prepare_silero_text("— ******!"), "— пик!")
+        self.assertEqual(prepare_silero_text("с**а"), "с…а")
+        self.assertEqual(prepare_silero_text("с-*-*-*-а"), "с-…-а")
+        self.assertEqual(prepare_silero_text("ху*ныш"), "ху…ныш")
+        self.assertEqual(prepare_silero_text("2 * 3"), "2 * 3")
+
+    def test_identifier_preserves_leading_zero(self):
+        self.assertEqual(
+            prepare_silero_text("группа 80−03"),
+            "группа 80 дефис ноль три",
+        )
+        self.assertEqual(
+            prepare_silero_text("группа 80-03"),
+            "группа 80 дефис ноль три",
+        )
+        self.assertEqual(prepare_silero_text("число 80"), "число 80")
+
+    def test_clock_notation_requires_clock_shape_and_context(self):
+        self.assertEqual(prepare_silero_text("Выезд в 9.30."), "Выезд в 9 30.")
+        self.assertEqual(prepare_silero_text("Выезд в 09.30."), "Выезд в 9 30.")
+        self.assertEqual(prepare_silero_text("Число 3.14."), "Число 3.14.")
+
+    def test_interrobang_is_normalized_for_silero(self):
+        self.assertEqual(prepare_silero_text("Правда⁈"), "Правда?!")
+
+    def test_manager_sends_protected_text_to_silero_wrapper(self):
+        config = SimpleNamespace(main_voice="xenia", comment_voice="eugene")
+        with patch("src.core.tts_silero.load_pronunciations", return_value=[]):
+            manager = SileroTTSManager(config)
+        wrapper = MagicMock()
+        wrapper.tts.side_effect = lambda _text, path: Path(path).write_bytes(b"0" * 1001)
+        manager._tts_ru = wrapper
+        manager._adjust_speed = AsyncMock()
+
+        with tempfile.TemporaryDirectory() as directory:
+            asyncio.run(
+                manager.synthesize_segment(
+                    "Выезд в 9.30: ******, группа 80−03⁈",
+                    "xenia",
+                    output_dir=Path(directory),
+                )
+            )
+
+        wrapper.tts.assert_called_once()
+        sent_text = wrapper.tts.call_args.args[0]
+        self.assertEqual(
+            sent_text,
+            "Выезд в 9 30: пик, группа 80 дефис ноль три?!",
+        )
 
 
 if __name__ == "__main__":

@@ -199,7 +199,7 @@ class Pipeline:
             end_chapter = self.config.chapter_end or total_chapters
             chapters_to_process = book.chapters[start_chapter:end_chapter]
             chapter_texts = [
-                " ".join(chapter.paragraphs)
+                "\n".join(chapter.paragraphs)
                 for chapter in chapters_to_process
             ]
             progress.set_chapters(chapter_texts)
@@ -258,8 +258,9 @@ class Pipeline:
                     "sentence_splitting",
                     chapter_index=chapter_num + 1,
                 ):
-                    sentences = self.sentence_splitter.split(
-                        " ".join(chapter.paragraphs),
+                    sentences = self.sentence_splitter.split_chapter(
+                        chapter.title,
+                        chapter.paragraphs,
                         book.metadata.lang,
                     )
 

@@ -28,6 +28,8 @@ class SentenceSplitter:
         }
         self._nlp_ru = None
         self._nlp_en = None
+        self._nlp_ru_load_attempted = False
+        self._nlp_en_load_attempted = False
 
     def split(self, text: str, lang: str = "ru") -> List[str]:
         """Разбиение текста на предложения.
@@ -44,12 +46,64 @@ class SentenceSplitter:
 
         splitter = self._splitters.get(lang, self._split_fallback)
         sentences = splitter(text)
-        # Фильтр пустых и слишком коротких строк
-        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 1]
+        # Знаки пунктуации сами по себе задают границу/паузу, но не являются
+        # речью и не должны запускать TTS inference.
+        sentences = [
+            sentence.strip()
+            for sentence in sentences
+            if self.has_speech_content(sentence)
+        ]
         return sentences
+
+    def split_paragraphs(
+        self,
+        paragraphs: List[str],
+        lang: str = "ru",
+    ) -> List[str]:
+        """Split each structural paragraph independently.
+
+        Keeping paragraphs separate until this point prevents an FB2 title or
+        paragraph ending from being merged into the next TTS segment.
+        """
+        segments: List[str] = []
+        for paragraph in paragraphs:
+            segments.extend(self.split(paragraph, lang))
+        return segments
+
+    def split_chapter(
+        self,
+        title: str,
+        paragraphs: List[str],
+        lang: str = "ru",
+    ) -> List[str]:
+        """Keep a structural title separate, then split body paragraphs."""
+        title_parts = [
+            " ".join(part.split())
+            for part in title.splitlines()
+            if part.strip()
+        ]
+        leading = paragraphs[:len(title_parts)]
+        has_structural_title = bool(title_parts) and len(leading) == len(title_parts) and all(
+            " ".join(paragraph.split()).casefold() == part.casefold()
+            for paragraph, part in zip(leading, title_parts)
+        )
+        if not has_structural_title:
+            return self.split_paragraphs(paragraphs, lang)
+
+        title_segments = self.split(" ".join(title_parts), lang)
+        body_segments = self.split_paragraphs(paragraphs[len(title_parts):], lang)
+        return title_segments + body_segments
+
+    @staticmethod
+    def has_speech_content(text: str) -> bool:
+        """Return whether a fragment contains something pronounceable."""
+        return any(character.isalnum() for character in text)
 
     def _load_spacy_ru(self):
         """Загрузка spacy модели для русского языка."""
+        if self._nlp_ru_load_attempted:
+            return self._nlp_ru is not None
+        self._nlp_ru_load_attempted = True
         if self._nlp_ru is None:
             try:
                 import spacy
@@ -71,6 +125,9 @@ class SentenceSplitter:
 
     def _load_spacy_en(self):
         """Загрузка spacy модели для английского языка."""
+        if self._nlp_en_load_attempted:
+            return self._nlp_en is not None
+        self._nlp_en_load_attempted = True
         if self._nlp_en is None:
             try:
                 import spacy
@@ -138,6 +195,13 @@ class SentenceSplitter:
             r'(?<=[…])\s+(?=(?:[—–-]\s*)?[«"\'“”]?\s*[А-ЯЁA-Z])'
             r'|'
             r'(?<=\.\.\.)\s+(?=(?:[—–-]\s*)?[«"\'“”]?\s*[А-ЯЁA-Z])'
+            r'|'
+            r'(?<=[?!]\.\.)\s+(?=[А-ЯЁA-Z])'
+            r'|'
+            # Interrobang is a boundary only for an unambiguous next sentence.
+            # A following dialogue dash is deliberately excluded so constructs
+            # such as "Что⁈ — спросил он" remain intact.
+            r'(?<=⁈)\s+(?=[«"\'“”]?\s*[А-ЯЁA-Z])'
         )
         chunks = re.split(ellipsis_split_pattern, text)
 

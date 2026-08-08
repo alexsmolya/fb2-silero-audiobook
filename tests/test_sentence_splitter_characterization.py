@@ -6,6 +6,7 @@
 """
 
 import unittest
+from unittest.mock import patch
 from src.core.sentence_splitter import SentenceSplitter
 
 
@@ -153,6 +154,51 @@ class TestSentenceSplitterCharacterization(unittest.TestCase):
         self.assertEqual(len(r3), 2)
         self.assertEqual(r3[0], "Он замолчал…")
         self.assertEqual(r3[1], "Павел пожал плечами.")
+
+    def test_11_structural_paragraphs_never_merge(self):
+        result = self.splitter.split_paragraphs(
+            ["Глава 1", "Первый абзац без точки", "Второй абзац."],
+            lang="ru",
+        )
+        self.assertEqual(
+            result,
+            ["Глава 1", "Первый абзац без точки", "Второй абзац."],
+        )
+        chapter = self.splitter.split_chapter(
+            "Глава 1\nПролог",
+            ["Глава 1", "Пролог", "Первый абзац без точки"],
+            lang="ru",
+        )
+        self.assertEqual(chapter, ["Глава 1 Пролог", "Первый абзац без точки"])
+
+    def test_12_punctuation_only_fragments_are_not_speech(self):
+        for text in ("— …", "…", "—", "?!", "⁈"):
+            with self.subTest(text=text):
+                self.assertEqual(self.splitter.split(text, lang="ru"), [])
+
+    def test_13_mixed_terminal_ellipsis_starts_new_sentence(self):
+        for terminal in ("?..", "!.."):
+            text = f"Первая фраза{terminal} Следующая фраза."
+            with self.subTest(terminal=terminal):
+                self.assertEqual(
+                    self.splitter.split(text, lang="ru"),
+                    [f"Первая фраза{terminal}", "Следующая фраза."],
+                )
+        dialogue = "— Могу ли я?.. — спросил Павел."
+        self.assertEqual(self.splitter.split(dialogue, lang="ru"), [dialogue])
+
+    def test_14_interrobang_splits_only_clear_next_sentence(self):
+        self.assertEqual(
+            self.splitter.split("Это правда⁈ Следующая фраза.", lang="ru"),
+            ["Это правда⁈", "Следующая фраза."],
+        )
+        dialogue = "— Это правда⁈ — спросил Павел."
+        self.assertEqual(self.splitter.split(dialogue, lang="ru"), [dialogue])
+
+    def test_15_spacy_load_failure_is_cached_for_paragraphs(self):
+        with patch("spacy.load", side_effect=OSError) as load:
+            self.splitter.split_paragraphs(["Первый.", "Второй."], lang="ru")
+        load.assert_called_once_with("ru_core_news_sm")
 
 
 if __name__ == "__main__":

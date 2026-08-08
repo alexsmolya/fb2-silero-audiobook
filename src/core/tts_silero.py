@@ -30,6 +30,22 @@ PROJECT_PRONUNCIATIONS_PATH = Path(__file__).resolve().parent.parent.parent / "p
 PRONUNCIATIONS_PATH = Path.home() / ".audiobook-generator" / "pronunciations.toml"
 PronunciationRule = Tuple[Pattern[str], str]
 
+_MASKED_ASTERISKS_RE = re.compile(
+    r"\*(?:-\*)+|(?<!\*)\*{2,}(?!\*)|(?<=\w)\*(?=\w)"
+)
+_IDENTIFIER_WITH_LEADING_ZERO_RE = re.compile(
+    r"(?<!\d)(\d+)([-−–])0(\d+)(?!\d)"
+)
+_CLOCK_RE = re.compile(r"(?<!\d)([01]?\d|2[0-3])\.([0-5]\d)(?!\d)")
+_CLOCK_CONTEXT_RE = re.compile(
+    r"(?:\b(?:в|к|до|после|около)|\b(?:выезд|вылет|начало|подъём|подъем))\s*$",
+    flags=re.IGNORECASE,
+)
+_RU_DIGIT_WORDS = (
+    "ноль", "один", "два", "три", "четыре",
+    "пять", "шесть", "семь", "восемь", "девять",
+)
+
 # Доступные голоса Silero
 SILERO_VOICES = {
     "ru": [
@@ -140,6 +156,36 @@ def apply_pronunciations(text: str, rules: List[PronunciationRule]) -> str:
             result,
         )
     return result
+
+
+def prepare_silero_text(text: str) -> str:
+    """Protect literary notation from context-free Silero wrapper rules."""
+    def replace_mask(match: re.Match[str]) -> str:
+        before = text[:match.start()].rstrip("-")[-1:]
+        after = text[match.end():].lstrip("-")[:1]
+        # A standalone mask represents an audible censor signal. Inside a
+        # partially visible word, an ellipsis preserves the redaction without
+        # inventing a spoken replacement for the hidden letters.
+        return "…" if before.isalnum() or after.isalnum() else "пик"
+
+    def replace_identifier(match: re.Match[str]) -> str:
+        suffix = " ".join(_RU_DIGIT_WORDS[int(digit)] for digit in "0" + match.group(3))
+        return f"{match.group(1)} дефис {suffix}"
+
+    def replace_clock(match: re.Match[str]) -> str:
+        prefix = result[:match.start()]
+        hour = match.group(1)
+        # A leading-zero hour is inherently clock-like. Without it, require a
+        # nearby time cue so an ordinary decimal such as 3.14 remains decimal.
+        if not hour.startswith("0") and not _CLOCK_CONTEXT_RE.search(prefix):
+            return match.group(0)
+        return f"{int(hour)} {match.group(2)}"
+
+    result = _MASKED_ASTERISKS_RE.sub(replace_mask, text)
+    result = _IDENTIFIER_WITH_LEADING_ZERO_RE.sub(replace_identifier, result)
+    result = _CLOCK_RE.sub(replace_clock, result)
+    result = result.replace("⁈", "?!")
+    return re.sub(r"[ \t]+", " ", result).strip()
 
 
 class SileroTTSManager(TTSBackend):
@@ -387,7 +433,9 @@ class SileroTTSManager(TTSBackend):
             # SileroTTS.tts() записывает WAV напрямую. Пользовательские ударения
             # применяются только здесь и только к русскому тексту Silero.
             text_for_tts = (
-                apply_pronunciations(text, self._ru_pronunciation_rules)
+                prepare_silero_text(
+                    apply_pronunciations(text, self._ru_pronunciation_rules)
+                )
                 if lang == "ru"
                 else text
             )
