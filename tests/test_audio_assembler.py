@@ -108,6 +108,61 @@ class AudioAssemblerTests(unittest.TestCase):
         # Input audio is 0.5 s; only the 0.25 s target deficit is inserted.
         self.assertAlmostEqual(assembler.get_audio_duration(output), 0.75, places=3)
 
+    def test_real_scale_adaptive_chapter_is_sample_accurate(self):
+        sample_rate = 22050
+        segment_frames = 220
+        segment_seconds = segment_frames / sample_rate
+        paths = []
+        for index in range(189):
+            path = self.base / f"segment_{index:03d}.wav"
+            self._write_constant_wav(path, 1000 + index, segment_seconds)
+            edge = (
+                EdgeSilence(0.30, 0.0)
+                if index == 1
+                else EdgeSilence(0.001, 0.002)
+            )
+            write_edge_silence(path, edge)
+            paths.append(path)
+
+        # Boundary 1 has an exact semantic deficit of zero, but binary float
+        # arithmetic produces 5.551115123125783e-17. The old duration-based
+        # filter graph passed that scientific notation to ffmpeg and failed.
+        write_edge_silence(paths[0], EdgeSilence(0.001, 0.15))
+        targets = [0.0, 0.45] + [0.010] * 187
+        output = self.base / "large-adaptive-chapter.wav"
+
+        assembler = AudioAssembler(sample_rate=sample_rate)
+        assembler.assemble_chapter(list(zip(paths, targets)), output)
+
+        padding_frames = [
+            0,
+            0,
+            round(0.009 * sample_rate),
+            *([round(0.007 * sample_rate)] * 186),
+        ]
+        expected_frames = 189 * segment_frames + sum(padding_frames)
+        with wave.open(str(output), "rb") as stream:
+            self.assertEqual(stream.getframerate(), sample_rate)
+            self.assertEqual(stream.getnchannels(), 1)
+            self.assertEqual(stream.getnframes(), expected_frames)
+            samples = struct.unpack(
+                f"<{stream.getnframes()}h",
+                stream.readframes(stream.getnframes()),
+            )
+
+        cursor = 0
+        for index, padding in enumerate(padding_frames):
+            self.assertTrue(all(value == 0 for value in samples[cursor:cursor + padding]))
+            cursor += padding
+            self.assertTrue(
+                all(
+                    value == 1000 + index
+                    for value in samples[cursor:cursor + segment_frames]
+                )
+            )
+            cursor += segment_frames
+        self.assertEqual(cursor, len(samples))
+
     def test_chapter_skips_padding_when_edges_already_meet_target(self):
         first = self.base / "first.wav"
         second = self.base / "second.wav"
@@ -154,6 +209,28 @@ class AudioAssemblerTests(unittest.TestCase):
                 [(audio, 0.3)], self.base / "chapter.wav", canceled,
             )
         assembler._run_ffmpeg.assert_not_called()
+
+    def test_ffmpeg_error_reports_diagnostic_tail_instead_of_banner(self):
+        assembler = AudioAssembler.__new__(AudioAssembler)
+        assembler._ffmpeg = "ffmpeg"
+        banner = "configuration: " + ("feature " * 1000)
+        diagnostic = (
+            '[Parsed_atrim_3] Unable to parse "duration" option value '
+            '"5.551115123125783e-17" as duration\nError: Invalid argument\n'
+        )
+        process = MagicMock()
+        process.communicate.return_value = (b"", (banner + diagnostic).encode())
+        process.returncode = 234
+
+        with patch("src.core.audio_assembler.sp.Popen", return_value=process):
+            with self.assertRaisesRegex(RuntimeError, "Unable to parse") as raised:
+                assembler._run_ffmpeg(["-version"])
+
+        message = str(raised.exception)
+        self.assertIn("код 234", message)
+        self.assertIn("5.551115123125783e-17", message)
+        self.assertIn("начало stderr опущено", message)
+        self.assertNotIn(banner, message)
 
 
 if __name__ == "__main__":

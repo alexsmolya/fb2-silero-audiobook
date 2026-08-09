@@ -29,6 +29,8 @@ from src.core.pause_policy import (
 
 logger = logging.getLogger(__name__)
 
+_FFMPEG_ERROR_TAIL_CHARS = 4096
+
 
 class AudioAssembler:
     """Склейка аудиофрагментов в главы и книгу через ffmpeg.
@@ -123,8 +125,14 @@ class AudioAssembler:
         if process.returncode:
             stderr = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
             logger.error("ffmpeg error (code %d): %s", process.returncode, stderr)
+            stderr_tail = stderr[-_FFMPEG_ERROR_TAIL_CHARS:]
+            if len(stderr) > len(stderr_tail):
+                stderr_tail = (
+                    "[начало stderr опущено; показан диагностический хвост]\n"
+                    + stderr_tail
+                )
             raise RuntimeError(
-                f"Ошибка ffmpeg (код {process.returncode}): {stderr[:500]}"
+                f"Ошибка ffmpeg (код {process.returncode}): {stderr_tail}"
             )
 
     def _make_silence(
@@ -181,11 +189,16 @@ class AudioAssembler:
                 self._check_canceled(cancel_event)
                 current_edge = read_edge_silence(audio_path)
                 pause = required_padding(target, previous_edge, current_edge)
-                if pause > 0:
+                # Express padding as an integer number of output samples. Besides
+                # making boundaries sample-accurate, this removes sub-sample
+                # floating-point residues such as 5.55e-17. FFmpeg's duration
+                # parser rejects that scientific notation during filter setup.
+                pause_samples = max(0, round(pause * self.sample_rate))
+                if pause_samples > 0:
                     pause_label = f"pause_{idx}"
                     filters.append(
                         f"anullsrc=r={self.sample_rate}:cl=mono,"
-                        f"atrim=duration={pause},asetpts=PTS-STARTPTS"
+                        f"atrim=end_sample={pause_samples},asetpts=PTS-STARTPTS"
                         f"[{pause_label}]"
                     )
                     concat_inputs.append(f"[{pause_label}]")
