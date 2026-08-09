@@ -1,15 +1,18 @@
 # Latest Codex report
 
-- Report: `codex-reports/2026-08-08_release-text-pauses_REPORT.md`
-- Run log: `codex-reports/logs/2026-08-08_release-text-pauses_RUNLOG.md`
-- Task: release accepted text segmentation and adaptive pause policy to `main`
-- Branch: `main`
-- Engineering commits: `345320389e2b9ee584ae4b81145e8dfa5a985947`,
-  `8c56f34f7c2e1de5f63743a0ab5f3f48e18826c9`
-- Integration head: `1eaaf00026eea7aecb8da8d8afab86908637914b`
-- Release documentation commit: `bd4fd86447298cec6892cf713070240411cc7720`
-- First published main head: `3ff15eb16afdb47e60a99b7a83fd8c692ca2d849`
-- Status: complete; ordinary `origin/main` push confirmed successful
-- Timestamp: `2026-08-08T16:38:14+02:00`
-- Suggested next action: use the updated desktop launcher and collect specific
-  model-only pronunciation/prosody errors during normal listening.
+- Report: `codex-reports/2026-08-09_ffmpeg-large-chapter-regression_REPORT.md`
+- Run log: `codex-reports/logs/2026-08-09_ffmpeg-large-chapter-regression_RUNLOG.md`
+- Task: fix FFmpeg failure during adaptive assembly of a 189-segment chapter
+- Engineering branch: `fix/large-chapter-ffmpeg-assembly`
+- Engineering and final functional main SHA: `bd58a2b77172a986de581ccc5cebfdc38eda33d7`
+- Root cause: a semantically zero adaptive deficit became
+  `5.551115123125783e-17`, which FFmpeg rejected as an `atrim` duration
+- Fix: integer-sample padding plus a 4-KiB diagnostic stderr tail
+- Verification: focused 8 passed; full 290 passed plus 51 subtests; compileall,
+  diff check, synthetic 189-file sample-order test, and ffprobe passed
+- Real chapter: unavailable because the failed run's temporary MP3/sidecar
+  directory had already been cleaned; no TTS rerun was performed
+- Installation: managed launcher refreshed and real-display GUI smoke passed
+- Publication: functional main `bd58a2b` pushed normally to `origin/main`
+- Status: complete
+- Timestamp: 2026-08-09 (Europe/Stockholm)
