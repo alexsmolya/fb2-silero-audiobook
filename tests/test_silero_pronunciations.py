@@ -17,6 +17,7 @@ from src.core.tts_silero import (
     harden_silero_ru_preprocessing,
     load_pronunciations,
     prepare_silero_text,
+    resolve_vse_vsyo_homographs,
 )
 
 
@@ -191,7 +192,7 @@ class SileroPronunciationTests(unittest.TestCase):
         # 5. Нумерация глав
         self.assertEqual(apply_pronunciations("Глава 1", rules), "Глава первая")
         self.assertEqual(apply_pronunciations("Глава 7", rules), "Глава седьмая")
-        self.assertEqual(apply_pronunciations("Глава 22", rules), "Глава двадцать вторая")
+        self.assertEqual(apply_pronunciations("Глава 22", rules), "Глава двадцать втор+ая")
 
     def test_missing_custom_file_falls_back_to_project_rules(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -264,6 +265,79 @@ class SileroPronunciationTests(unittest.TestCase):
         self.assertEqual(
             sent_text,
             "Выезд в 9 30: пик, группа 80 дефис ноль три?!",
+        )
+
+    def test_homograph_resolution_vse_vsyo(self):
+        self.assertEqual(prepare_silero_text("Все пришли."), "Вс+е пришли.")
+        self.assertEqual(prepare_silero_text("Всё прошло."), "Всё прошло.")
+        self.assertEqual(
+            prepare_silero_text("Убедившись, что все ознакомились с посланием, Волконская открыла прикрепленное к нему фото."),
+            "Убедившись, что вс+е ознакомились с посланием, Волконская открыла прикрепленное к нему фото.",
+        )
+        self.assertEqual(prepare_silero_text("Все выпили?"), "Вс+е выпили?")
+        self.assertEqual(prepare_silero_text("Всё выпили?"), "Всё выпили?")
+        self.assertEqual(
+            prepare_silero_text("Но все же события последних суток…"),
+            "Но всё же события последних суток…",
+        )
+        self.assertEqual(
+            prepare_silero_text("Но всё же события последних суток…"),
+            "Но всё же события последних суток…",
+        )
+        self.assertEqual(
+            prepare_silero_text("Все же события последних суток произошли вчера."),
+            "Вс+е же события последних суток произошли вчера.",
+        )
+        self.assertEqual(prepare_silero_text("Он все равно пришел."), "Он всё равно пришел.")
+        self.assertEqual(prepare_silero_text("Она все еще ждала."), "Она всё еще ждала.")
+        self.assertEqual(prepare_silero_text("Они все-таки приехали."), "Они всё-таки приехали.")
+
+    def test_phase2_pronunciation_fixes(self):
+        rules = load_pronunciations()
+
+        # 1. один в один vs God Один
+        self.assertEqual(
+            prepare_silero_text("Во всяком случае, если верить рассказам, то один в один."),
+            "Во всяком случае, если верить рассказам, то один в од+ин.",
+        )
+        self.assertEqual(
+            prepare_silero_text("Бог Один восседал на престоле."),
+            "Бог Один восседал на престоле.",
+        )
+        self.assertEqual(
+            prepare_silero_text("Они были равны один к одному."),
+            "Они были равны один к одному.",
+        )
+
+        # 2. туше
+        self.assertEqual(apply_pronunciations("туше", rules), "туш+е")
+        self.assertEqual(
+            apply_pronunciations("— 1:0, — хмыкнул Глава. — И полное туше.", rules),
+            "— 1:0, — хмыкнул Глава. — И полное туш+е.",
+        )
+
+        # 3. второй
+        self.assertEqual(apply_pronunciations("второй", rules), "втор+ой")
+        self.assertEqual(apply_pronunciations("второго", rules), "втор+ого")
+        self.assertEqual(
+            apply_pronunciations("Ему второй «медовый месяц» после стольких лет выпал.", rules),
+            "Ему втор+ой «медовый месяц» после стольких лет выпал.",
+        )
+
+        # 4. Максим
+        self.assertEqual(apply_pronunciations("Максим", rules), "Макс+им")
+        self.assertEqual(apply_pronunciations("Максима", rules), "Макс+има")
+        self.assertEqual(
+            apply_pronunciations("— Максим! — крикнул Волконский.", rules),
+            "— Макс+им! — крикнул Волконский.",
+        )
+
+        # 5. Валерыч
+        self.assertEqual(apply_pronunciations("Валерыч", rules), "Вал+ерыч")
+        self.assertEqual(apply_pronunciations("Валерыча", rules), "Вал+ерыча")
+        self.assertEqual(
+            apply_pronunciations("— вставил свои пять копеек из-за спин братьев Валерыч.", rules),
+            "— вставил свои пять копеек из-за спин братьев Вал+ерыч.",
         )
 
 

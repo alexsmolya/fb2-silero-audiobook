@@ -159,8 +159,77 @@ def apply_pronunciations(text: str, rules: List[PronunciationRule]) -> str:
     return result
 
 
+def resolve_vse_vsyo_homographs(text: str) -> str:
+    """Context-aware Russian homograph resolution for все / всё."""
+    # 1. Fixed adverbs & idioms where "все" is ungrammatical (always "всё")
+    text = re.sub(r"\b([Вв])се(-таки\b|\s+-?\(?таки\b)", r"\g<1>сё\2", text)
+    text = re.sub(r"\b([Вв])се(\s+равно\b)", r"\g<1>сё\2", text)
+    text = re.sub(r"\b([Вв])се(\s+так\s+же\b)", r"\g<1>сё\2", text)
+    text = re.sub(r"\b([Вв])се(\s+время\b)", r"\g<1>сё\2", text)
+    text = re.sub(r"\b([Вв])се(\s+ещ[её]\b)", r"\g<1>сё\2", text)
+    text = re.sub(r"\b([Вв])се(\s+всерь[её]з\b)", r"\g<1>сё\2", text)
+    text = re.sub(
+        r"\b([Вв])се(\s+(?:больше|меньше|проще|дальше|чаще|ближе|тяжелее|сильнее|лучше|хуже|дороже|дешевле|быстрее|медленнее|выше|ниже|глубже)\b)",
+        r"\g<1>сё\2",
+        text,
+    )
+    text = re.sub(
+        r"\b([Вв])се(\s+(?:это|этого|этому|этим|этом|то|того|тому|тем|том|остальное|остального|необходимое|прочее)\b)",
+        r"\g<1>сё\2",
+        text,
+    )
+    text = re.sub(r"\b([Вв])се(\s+самое\b)", r"\g<1>сё\2", text)
+
+    # 2. Idiom "всё же" vs plural modifier "все же"
+    def fix_zhe(match: re.Match[str]) -> str:
+        word = match.group(1)
+        rest = match.group(2)
+        start_idx = match.start()
+        prefix = text[:start_idx].rstrip()
+
+        conjunction_match = re.search(r"\b(но|и|а|как|где|хотя|даже|так)\s+$", prefix, re.IGNORECASE)
+
+        after_text = text[match.end():].strip()
+        words = re.findall(r"\b[^\s,.!?:;—–\-«»\"\'()]+\b", after_text)
+
+        has_plural_noun = any(
+            w.endswith("ия") or w.endswith("ы") or w.endswith("и") or w.endswith("а")
+            for w in words[:2]
+        )
+        has_plural_verb = any(
+            w.endswith("ли") or w.endswith("лись") or w.endswith("ют") or w.endswith("ут") or w.endswith("ят") or w.endswith("ат")
+            for w in words[1:5]
+        )
+
+        if has_plural_noun and has_plural_verb and not conjunction_match:
+            prefix_char = word[0]
+            stressed = "Вс+е" if prefix_char.isupper() else "вс+е"
+            return f"{stressed}{rest}"
+
+        prefix_char = word[0]
+        new_word = "Всё" if prefix_char.isupper() else "всё"
+        return f"{new_word}{rest}"
+
+    text = re.sub(r"\b([Вв]се)(\s+же?\b)", fix_zhe, text)
+
+    # 3. Protect explicit plural "все" before plural verbs from Silero mis-yoification
+    def fix_plural_vse(match: re.Match[str]) -> str:
+        word = match.group(1)
+        rest = match.group(2)
+        prefix_char = word[0]
+        stressed = "Вс+е" if prefix_char.isupper() else "вс+е"
+        return f"{stressed}{rest}"
+
+    text = re.sub(r"\b([Вв]се)(\s+(?:[а-яёА-ЯЁ]+(?:ли|лись|ют|ут|ят|ат)\b))", fix_plural_vse, text)
+
+    # 4. Context-aware "один в один" -> "один в од+ин" (protects God "Один" and single "один")
+    text = re.sub(r"\b([Оо]дин)\s+в\s+один\b", r"\g<1> в од+ин", text)
+
+    return text
+
+
 def prepare_silero_text(text: str) -> str:
-    """Protect literary notation from context-free Silero wrapper rules."""
+    """Protect literary notation and resolve homographs from Silero wrapper rules."""
     def replace_mask(match: re.Match[str]) -> str:
         before = text[:match.start()].rstrip("-")[-1:]
         after = text[match.end():].lstrip("-")[:1]
@@ -182,11 +251,13 @@ def prepare_silero_text(text: str) -> str:
             return match.group(0)
         return f"{int(hour)} {match.group(2)}"
 
-    result = _MASKED_ASTERISKS_RE.sub(replace_mask, text)
+    result = resolve_vse_vsyo_homographs(text)
+    result = _MASKED_ASTERISKS_RE.sub(replace_mask, result)
     result = _IDENTIFIER_WITH_LEADING_ZERO_RE.sub(replace_identifier, result)
     result = _CLOCK_RE.sub(replace_clock, result)
     result = result.replace("⁈", "?!")
     return re.sub(r"[ \t]+", " ", result).strip()
+
 
 
 class SileroTTSManager(TTSBackend):
