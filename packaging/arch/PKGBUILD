@@ -1,0 +1,46 @@
+# Maintainer: Alex Smolya <127655982+alexsmolya@users.noreply.github.com>
+
+pkgname=fb2-silero-audiobook
+pkgver=0.2.1
+pkgrel=1
+pkgdesc="Offline Russian FB2-to-MP3 audiobook generator using Silero TTS"
+arch=('x86_64')
+url="https://github.com/alexsmolya/fb2-silero-audiobook"
+license=('MIT')
+depends=('python' 'uv' 'tk' 'ffmpeg')
+makedepends=('git')
+optdepends=(
+  'calibre: import EPUB, MOBI, AZW/AZW3, TXT, DOCX, ODT, RTF and HTML formats'
+  'nvidia-utils: NVIDIA runtime libraries for CUDA acceleration'
+  'libnotify: desktop notification when the Python environment is not initialized'
+)
+install=fb2-silero-audiobook.install
+source=(
+  "$pkgname::git+$url.git#tag=v$pkgver"
+  'fb2-silero-audiobook'
+  'fb2-silero-audiobook.desktop'
+  'fb2-silero-audiobook.install'
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  cd "$srcdir/$pkgname"
+
+  install -d "$pkgdir/usr/share/$pkgname"
+  cp -a --no-preserve=ownership . "$pkgdir/usr/share/$pkgname/"
+  rm -rf "$pkgdir/usr/share/$pkgname/.git" \
+         "$pkgdir/usr/share/$pkgname/packaging"
+
+  install -Dm755 "$srcdir/fb2-silero-audiobook" \
+    "$pkgdir/usr/bin/fb2-silero-audiobook"
+  install -Dm644 "$srcdir/fb2-silero-audiobook.desktop" \
+    "$pkgdir/usr/share/applications/fb2-silero-audiobook.desktop"
+  install -Dm644 logo.png \
+    "$pkgdir/usr/share/pixmaps/fb2-silero-audiobook.png"
+  install -Dm644 LICENSE \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md \
+    "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 CHANGELOG.md \
+    "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
+}

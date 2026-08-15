@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly APP_DIR="/usr/share/fb2-silero-audiobook"
+readonly DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+readonly ENV_DIR="$DATA_HOME/fb2-silero-audiobook/venv"
+readonly STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+readonly LOG_DIR="$STATE_HOME/fb2-silero-audiobook"
+readonly SETUP_LOG="$LOG_DIR/setup.log"
+
+show_setup_required() {
+  local message
+  message=$'Необходимо один раз подготовить окружение Silero.\n\nОткройте терминал и выполните:\n\nfb2-silero-audiobook --setup\n\nБудут загружены закреплённые зависимости из uv.lock. Для ускорения на NVIDIA нужен совместимый драйвер; без него программа работает на CPU.'
+
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send --urgency=normal --icon=fb2-silero-audiobook \
+      'FB2 Silero Audiobook: требуется настройка' "$message" || true
+  fi
+
+  python - "$message" <<'PY' || true
+import sys
+import tkinter as tk
+from tkinter import messagebox
+
+root = tk.Tk()
+root.withdraw()
+messagebox.showinfo("FB2 Silero Audiobook", sys.argv[1])
+root.destroy()
+PY
+}
+
+setup_environment() {
+  mkdir -p "$ENV_DIR" "$LOG_DIR"
+  export UV_PROJECT_ENVIRONMENT="$ENV_DIR"
+
+  echo "Подготовка окружения FB2 Silero Audiobook"
+  echo "Приложение: $APP_DIR"
+  echo "Окружение: $ENV_DIR"
+  echo "Журнал: $SETUP_LOG"
+  echo
+
+  cd "$APP_DIR"
+  uv sync --frozen --python 3.12 --extra silero 2>&1 | tee "$SETUP_LOG"
+
+  "$ENV_DIR/bin/python" - <<'PY'
+import torch
+import torchaudio
+from src.core.tts_silero import SILERO_RU_MODEL_ID
+
+print()
+print("Окружение готово.")
+print(f"torch: {torch.__version__}")
+print(f"torchaudio: {torchaudio.__version__}")
+print(f"Silero model: {SILERO_RU_MODEL_ID}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+PY
+}
+
+case "${1:-}" in
+  --setup)
+    setup_environment
+    exit 0
+    ;;
+  --reset-environment)
+    rm -rf "$ENV_DIR"
+    echo "Окружение удалено: $ENV_DIR"
+    echo "Для повторной установки выполните: fb2-silero-audiobook --setup"
+    exit 0
+    ;;
+  --print-environment)
+    printf '%s\n' "$ENV_DIR"
+    exit 0
+    ;;
+esac
+
+if [[ ! -x "$ENV_DIR/bin/python" ]]; then
+  show_setup_required
+  exit 1
+fi
+
+export UV_PROJECT_ENVIRONMENT="$ENV_DIR"
+cd "$APP_DIR"
+exec "$ENV_DIR/bin/python" "$APP_DIR/audiobook_gui.py" "$@"

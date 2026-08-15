@@ -1,0 +1,27 @@
+post_install() {
+  cat <<'EOF'
+
+FB2 Silero Audiobook установлен.
+
+Перед первым запуском подготовьте закреплённое Python/Silero-окружение:
+
+  fb2-silero-audiobook --setup
+
+Загрузка выполняется один раз в пользовательский каталог.
+Для дополнительных книжных форматов установите calibre.
+CUDA используется автоматически при наличии совместимого NVIDIA-драйвера;
+без CUDA приложение продолжает работать на CPU.
+
+EOF
+}
+
+post_upgrade() {
+  cat <<'EOF'
+
+FB2 Silero Audiobook обновлён.
+Если после обновления изменился uv.lock, повторите:
+
+  fb2-silero-audiobook --setup
+
+EOF
+}
