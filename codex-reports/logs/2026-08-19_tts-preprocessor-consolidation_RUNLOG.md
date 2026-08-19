@@ -22,6 +22,6 @@ Commands and relevant outcomes; no hidden reasoning included.
 | Short artifact smoke | exit 0; `.tts.md` and `.tts-changes.json` created under `/tmp/audiobook-tts-smoke.pY6a0m` |
 | `git commit -m 'feat: consolidate deterministic TTS preprocessing'` | exit 0; `34033a887e797a7cc5a456d9cf589ab0e5b3b8be` |
 
-Remaining publication action: normal push of the feature branch, subject to
-network availability. No merge or force-push is in scope.
-
+Normal push completed after a DNS-related retry using the approved network
+path: `origin/feat/tts-preprocessor-consolidation` at `c88785c043ea...`.
+No merge or force-push is in scope.

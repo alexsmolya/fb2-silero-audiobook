@@ -104,7 +104,6 @@ the unchanged pause/audio paths.
 
 ## Git/publication
 
-At report creation the worktree contains the implementation commit plus this
-report/runlog/LATEST update. No merge, rebase, force-push, or GitHub action was
-performed.
-
+At handoff the worktree is clean and the feature branch is published at
+`origin/feat/tts-preprocessor-consolidation` (`c88785c043ea5126798da5b02e7a7d341d020bab`).
+No merge, rebase, force-push, or GitHub action was performed.
