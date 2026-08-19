@@ -104,6 +104,53 @@ contains five approximate MP3 localization clips plus the real-context
 long-vowel A/B directory. MP3 localization is paragraph-ratio based; it is
 not reliable alignment and cannot establish stress.
 
+## Local production pass
+
+The local production entrypoint is `.venv/bin/python audiobook_gui.py`. The
+managed desktop entry at
+`~/.local/share/applications/fb2-silero-audiobook.desktop` points directly to
+`/home/alex/Projects/audiobook-generator/.venv/bin/python` and the current
+`audiobook_gui.py`; `scripts/install_desktop.py` was run successfully to refresh
+it. No parallel installation was created. The cached model
+`/home/alex/.local/share/fb2-silero-audiobook/models/v5_5_ru/v5_5_ru_ru.pt`
+was reused.
+
+A persistent short end-to-end run completed successfully at
+`/home/alex/Загрузки/AudioBook/_local-production-smoke/`. It parsed a synthetic
+FB2, ran `TtsPreprocessor` before segmentation, wrote the normalized script and
+change log, synthesized seven segments with Silero, and assembled
+`Local Production Smoke.mp3` through the existing FFmpeg/audio path. The run
+ended with zero diagnostic errors. The artifacts are:
+
+- `local-production-smoke.tts.md`
+- `local-production-smoke.tts-changes.json`
+- `Local Production Smoke.mp3`
+- `run-logs/`
+
+Normal production runs persist `.tts.md` and `.tts-changes.json` beside the
+selected output book under the configured output directory (currently
+`/home/alex/Загрузки/AudioBook`), and diagnostic logs under
+`~/.local/state/fb2-silero-audiobook/logs/`. The smoke used its own persistent
+`run-logs/` directory for isolation.
+
+The desktop file validated successfully. Direct GUI launch was attempted but
+the session's `:0` display rejected the connection with
+`_tkinter.TclError: couldn't connect to display ":0"`; `xvfb-run`/other
+headless X servers are unavailable. This is recorded as an environment-limited
+GUI check; the launcher target and the actual non-GUI production pipeline both
+validated successfully.
+
+The real corpus was not modified. Books 9/10 retained 2819/2872 source and
+normalized paragraphs, with 6394/6387 segments, zero paragraph crossings, zero
+accidental title/body merges, zero punctuation-only segments, and zero empty
+segments. The expressive audit retained the accepted v3 result: 113 rows,
+110 transformed, 3 skipped negative controls, 0 suspicious, and 113 lexical
+preservation passes. Pause policy, model-silence handling, and FFmpeg sample
+padding code were not changed.
+
+`codex-reports/2026-08-19_tts-preprocessor-consolidation_FINAL_LOCAL_VALIDATION.md`
+contains the concise local validation handoff.
+
 ## Artifact and audio smoke
 
 ## Human A/B decision and production long-vowel rule
@@ -134,6 +181,19 @@ succeeded; automated output cannot establish perceptual quality, so the
 the transform is a best-effort workaround rather than a true fix of Silero
 prosody. No FB2 or full-book MP3 was added to Git.
 
+## Upstream candidates (not published)
+
+- Silero prosody: repeated-vowel notation still does not produce a fully
+  natural continuous vowel; v3 is an application-level workaround.
+- Silero/model behavior: the standalone initial `О` in book 10 chapter 4
+  paragraph 79 was heard as `А` across tested variants; it remains a minimal
+  local reproduction candidate, not a claimed universal model defect.
+- Accentor/abbreviation behavior remains a possible upstream candidate only
+  after independent minimal reproductions; the current fixes are deliberately
+  application lexicon/context rules.
+
+No issue, PR, or other upstream publication was created.
+
 ## Limitations and review focus
 
 - `source_offsets` are reserved in the change schema but are currently null;
@@ -150,6 +210,6 @@ the unchanged pause/audio paths.
 
 ## Git/publication
 
-At handoff the worktree is clean and the feature branch is published at
-`origin/feat/tts-preprocessor-consolidation` (`6dc1b8f66126f51a3f98b84b186419c88d6db58d`).
-No merge, rebase, force-push, or GitHub action was performed.
+Git remains secondary archival publication. The local validation and Drive
+handoff must be read back before the final archival commit/push; no merge,
+rebase, force-push, or upstream action is in scope.
