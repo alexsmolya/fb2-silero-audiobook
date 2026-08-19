@@ -72,5 +72,8 @@ Persistent artifact locations and final local validation are summarized in
 
 Normal push completed after a DNS-related retry using the approved network
 path: `origin/feat/tts-preprocessor-consolidation` at `c88785c043ea...`.
-For this local-production pass, Drive handoff/read-back precedes the secondary
-archival commit/push. No merge or force-push is in scope.
+Drive bundle manifest and patch read-back succeeded; the first report upload
+hit a Google Drive API quota limit, then the bounded retry succeeded and the
+report checksum matched local content. The local-production documentation was
+committed after that handoff as
+`1d692b8f39bf7d6fbeaf77511999c0e7a055685f`. No merge or force-push is in scope.

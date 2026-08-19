@@ -210,6 +210,8 @@ the unchanged pause/audio paths.
 
 ## Git/publication
 
-Git remains secondary archival publication. The local validation and Drive
-handoff must be read back before the final archival commit/push; no merge,
-rebase, force-push, or upstream action is in scope.
+The local validation and pre-archive Drive handoff were read back before the
+archival commit. Final local-production documentation is committed as
+`1d692b8f39bf7d6fbeaf77511999c0e7a055685f`; the feature branch is ready for a
+normal push. Git remains secondary archival publication. No merge, rebase,
+force-push, or upstream action is in scope.
