@@ -81,7 +81,7 @@ the baseline before this feature branch.
 | `galitsyn`: `Галицын`, case forms | `Гал+ицын`, forms with same stem stress | proper name | NO | explicit book/project lexicon profile only | universal surname pronunciation must remain untouched | confirmed, project-specific |
 | `borisovich`: `Борисович` | `Бор+исович` if existing class requires it | proper name / patronymic | PARTIAL/verify existing implementation first | existing patronymic-class hook, no blanket suffix regex | unrelated patronymics and other stress | observed/verification required |
 | `kher`: `какого хера`, `хера себе` | no global rewrite; phrase-specific only | phrase stress | NO | experimental/context resolver with negative controls | `хер+а себе`; Gramota permits variants | unresolved as universal rule |
-| `long-vowels`: `о-о-о`, `ааа`, `не-е-ет` | no production transform yet | expressive prosody | NO | detector + corpus + experiment metadata only | normal repeated letters; punctuation | experimental / model limitation unresolved |
+| `long-vowels`: `о-о-о`, `ааа`, `не-е-ет` | explicit expressive runs -> exactly 3 contiguous vowels; ordinary triples unchanged | expressive prosody | YES, `tts_preprocessor.py` | human-selected v3 transform; plain runs require 4+ copies | normal repeated letters; punctuation; initial standalone `О` model artifact | confirmed workaround / model limitation remains |
 | `acronym`: `СВУ`, `СИБ` | explicit `spell_letters` vs `lexicalized_word` | acronym | NO | lexicon resolver with unknown/log-only fallback | never `ALL_CAPS => letters` | experimental / unresolved |
 
 ## Consolidation decisions
@@ -92,8 +92,8 @@ the baseline before this feature branch.
    no paragraph is flattened to gain context.
 3. Project-name rules require an explicit profile/override; `Галицын` is not made a
    universal surname rule.
-4. Long-vowel and acronym handling are represented as inventory/test architecture,
-   not speculative production rewrites.
+4. Long-vowel handling uses the human-selected v3 best-effort transform; acronym
+   handling remains architecture-only and unresolved.
 5. Pause policy, edge metadata, FFmpeg sample padding, and diagnostics remain
    downstream contracts. The compiler records source/normalized/segment identity
    but does not alter audio timing semantics.
@@ -112,7 +112,8 @@ implemented in `src/core/tts_preprocessor.py` and/or pipeline integration:
   deterministic narrow rules with tests and controls;
 - `Галицын` is implemented only when the explicit profile resolves to the known
   `Гимн шута`/`book9` project profile;
-- acronym and long-vowel classes remain intentionally unresolved for production;
+- acronym handling remains intentionally unresolved for production; long-vowel
+  normalization is now production v3 with the documented model limitation;
 - `какого хера` remains intentionally unresolved as a universal rule because the
   journal records accepted normative variants and requires phrase-specific proof;
 - `Борисович` remains a verification/debt item until an existing patronymic class

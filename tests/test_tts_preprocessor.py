@@ -10,6 +10,7 @@ from src.core.sentence_splitter import SentenceSplitter
 from src.core.tts_preprocessor import (
     TtsPreprocessor,
     detect_expressive_elongations,
+    normalize_expressive_elongations,
     resolve_acronym,
     write_tts_artifacts,
 )
@@ -191,10 +192,43 @@ def test_segment_ids_can_follow_compiled_paragraphs() -> None:
 
 
 def test_expressive_elongation_is_detected_but_not_transformed() -> None:
-    assert [item["text"] for item in detect_expressive_elongations(
-        "о-о-о ааа Не-е-ет слово"
-    )] == ["о-о-о", "ааа", "е-е-е"]
+    detected = detect_expressive_elongations("о-о-о ааа аааа Не-е-ет слово")
+    assert [item["text"] for item in detected] == ["о-о-о", "аааа", "е-е-е"]
+    assert [item["normalized"] for item in detected] == ["ооо", "ааа", "еее"]
     assert detect_expressive_elongations("слово") == []
+
+
+def test_expressive_vowels_use_v3_and_preserve_everything_else() -> None:
+    cases = {
+        "Да-а-а-ай!": "Дааай!",
+        "Но-о-ормально": "Нооормально",
+        "о-о-очень": "ооочень",
+        "О да-а-а-а-а…": "О дааа…",
+        "Не-е-ет!": "Нееет!",
+        "Бо-о-ольно.": "Бооольно.",
+    }
+    for source, expected in cases.items():
+        assert normalize_expressive_elongations(source) == expected
+
+    assert normalize_expressive_elongations("машина-авария") == "машина-авария"
+    assert normalize_expressive_elongations("по-русски") == "по-русски"
+    assert normalize_expressive_elongations("молоко") == "молоко"
+    assert normalize_expressive_elongations("ааа") == "ааа"
+
+
+def test_expressive_rule_is_traceable_and_keeps_lexical_characters() -> None:
+    import re
+
+    source = "О да-а-а-а-а… Бо-о-ольно."
+    normalized = TtsPreprocessor(backend="silero").compile_book(ParsedBook(
+        metadata=BookMetadata(lang="ru"),
+        chapters=[Chapter(paragraphs=[source])],
+    ))
+    output = normalized.chapters[0].paragraphs[0]
+    assert output == "О дааа… Бооольно."
+    assert any(change.rule_id == "prosody.expressive_vowel_v3" for change in normalized.changes)
+    strip_vowels = lambda text: re.sub(r"[аеёиоуыэюяАЕЁИОУЫЭЮЯ]", "", text)
+    assert strip_vowels(output) == strip_vowels(source).replace("-", "")
 
 
 def test_acronym_resolution_requires_explicit_entries() -> None:

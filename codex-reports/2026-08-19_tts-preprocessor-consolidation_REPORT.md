@@ -34,7 +34,7 @@ The canonical cross-source inventory is
 | Existing rule/structural families preserved and represented in the compiler | 36 |
 | Existing families migrated to the explicit preprocessor | 36 |
 | Newly implemented confirmed narrow rules | 18 |
-| Intentionally unresolved/deferred classes or findings | 4 |
+| Intentionally unresolved/deferred classes or findings | 3 |
 
 The 18 new rules cover the confirmed journal forms for `обречённо`,
 `два с половиной часа`, `набралось`, negative `не было`, contextual `потом`,
@@ -45,12 +45,11 @@ identifiers, clock notation, interrobang, abbreviation hardening, heading
 normalization, FB2 structure, and prior segmentation/pause/audio safeguards
 are retained.
 
-Deferred items are: expressive long-vowel production transformation,
-acronym classification without an explicit lexicon, universal `Борисович`
-handling, and global `какого хера` stress. The code has an experimental
-elongation detector and explicit acronym resolver, but neither changes normal
-production text. `Галицын` is a project/book profile override, not a universal
-surname rule.
+Deferred items are: acronym classification without an explicit lexicon,
+universal `Борисович` handling, and global `какого хера` stress. Expressive
+long-vowel handling is now a production v3 best-effort transform for explicit
+notation; it is not a true prosody fix. `Галицын` is a project/book profile
+override, not a universal surname rule.
 
 ## Journal and prior evidence
 
@@ -65,9 +64,9 @@ patronymic regexes, and long-vowel heuristics were honored.
 ## Validation
 
 - Baseline focused suite before changes: 59 passed, 1 warning, 7 subtests.
-- New preprocessor suite: 10 passed.
-- Focused regression suite: **69 passed, 1 warning, 7 subtests passed**, exit 0.
-- Full suite: **302 passed, 2 warnings, 51 subtests passed**, exit 0.
+- New preprocessor suite: 12 passed.
+- Focused regression suite: 71 passed, 2 warnings, 7 subtests passed, exit 0.
+- Full suite: **304 passed, 2 warnings, 51 subtests passed**, exit 0.
 - `python -m compileall -q src tests`: exit 0.
 - `uv lock --check`: exit 0 (`Resolved 123 packages`).
 - `git diff --check`: exit 0.
@@ -107,6 +106,20 @@ not reliable alignment and cannot establish stress.
 
 ## Artifact and audio smoke
 
+## Human A/B decision and production long-vowel rule
+
+Human listening selected v3 as the stable compromise: expressive vowel runs
+are normalized to exactly three contiguous copies. v4 was not selected because
+its quality was inconsistent across real phrases. The transform applies only
+to explicit hyphenated runs and plain runs of four or more repeated vowels;
+ordinary triple vowels and ordinary hyphenated words remain unchanged.
+
+The 113-row real-corpus dry-run transformed 110 rows, skipped 3 negative
+controls (`эээ`, `Эээ`, `Фамилиии`), found 0 suspicious cases, and passed
+lexical-character preservation for all 113 rows. In book 10 chapter 4
+paragraph 79, the standalone initial `О` sounding as `А` remains a separate
+Silero `MODEL_LIMITATION`; the transform does not touch it.
+
 A short pipeline smoke produced:
 
 - `/tmp/audiobook-tts-smoke.pY6a0m/smoke-book.tts.md` (316 bytes)
@@ -118,8 +131,8 @@ generated 16 MP3 fragments under `forensic-output/book09-10/long-vowel-real-cont
 four actual FB2 phrases, each with original/3/4/5-vowel candidates. Examples
 include `Да-а-а-ай`, `Но-о-ормально`, `о-о-очень`, and `да-а-а-а-а`. Synthesis
 succeeded; automated output cannot establish perceptual quality, so the
-production transform remains opt-in/unresolved. No FB2 or full-book MP3 was
-added to Git.
+the transform is a best-effort workaround rather than a true fix of Silero
+prosody. No FB2 or full-book MP3 was added to Git.
 
 ## Limitations and review focus
 

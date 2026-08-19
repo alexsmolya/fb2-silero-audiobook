@@ -45,9 +45,12 @@ _BROKEN_RU_ABBREVIATION_PATTERNS = {
     r"д.\s*н.\s*э.": r"(?<!\w)д\.\s*н\.\s*э\.(?!\w)",
     r"н.\s*э.": r"(?<!\w)н\.\s*э\.(?!\w)",
 }
-_ELONGATED_VOWEL_RE = re.compile(
-    r"(?P<vowel>[аеёиоуыэюя])(?:[-–—](?P=vowel))+|"
-    r"(?P<plain>[аеёиоуыэюя])(?P=plain){2,}",
+_EXPRESSIVE_HYPHENATED_VOWEL_RE = re.compile(
+    r"(?:[-–—](?=[аеёиоуыэюя]))?(?P<vowel>[аеёиоуыэюя])(?:[-–—](?P=vowel)){2,}",
+    re.IGNORECASE,
+)
+_EXPRESSIVE_PLAIN_VOWEL_RE = re.compile(
+    r"(?P<vowel>[аеёиоуыэюя])(?P=vowel){3,}",
     re.IGNORECASE,
 )
 
@@ -74,12 +77,37 @@ def resolve_acronym(
 
 
 def detect_expressive_elongations(text: str) -> List[Dict[str, Any]]:
-    """Detect expressive vowel spellings without changing production text."""
+    """Detect explicit expressive notation and describe its v3 candidate."""
+    matches = list(_EXPRESSIVE_HYPHENATED_VOWEL_RE.finditer(text))
+    matches.extend(_EXPRESSIVE_PLAIN_VOWEL_RE.finditer(text))
+    matches.sort(key=lambda match: match.start())
     return [
-        {"text": match.group(0), "start": match.start(), "end": match.end(),
-         "status": "experimental"}
-        for match in _ELONGATED_VOWEL_RE.finditer(text)
+        {
+            "text": match.group(0),
+            "normalized": _expressive_vowel_replacement(match),
+            "start": match.start(),
+            "end": match.end(),
+            "notation": "hyphenated" if "-" in match.group(0) or "–" in match.group(0) or "—" in match.group(0) else "plain_repeated",
+            "status": "production_v3",
+        }
+        for match in matches
     ]
+
+
+def _expressive_vowel_replacement(match: re.Match[str]) -> str:
+    vowel = match.group("vowel")
+    return vowel * 3
+
+
+def normalize_expressive_elongations(text: str) -> str:
+    """Normalize explicit expressive vowel runs to three contiguous vowels.
+
+    Hyphenated runs of three or more are always explicit notation. Plain runs
+    are accepted only at four or more characters, leaving ordinary triple
+    vowels unchanged. All non-vowel characters are preserved.
+    """
+    result = _EXPRESSIVE_HYPHENATED_VOWEL_RE.sub(_expressive_vowel_replacement, text)
+    return _EXPRESSIVE_PLAIN_VOWEL_RE.sub(_expressive_vowel_replacement, result)
 
 
 @dataclass(frozen=True)
@@ -300,6 +328,21 @@ class TtsPreprocessor:
             ))
         result = dictionary_result
         result = self._apply_context_rules(result, chapter, paragraph, source_id, changes)
+        expressive_result = normalize_expressive_elongations(result)
+        if expressive_result != result:
+            changes.append(ChangeRecord(
+                rule_id="prosody.expressive_vowel_v3",
+                original=result,
+                normalized=expressive_result,
+                chapter=chapter,
+                paragraph=paragraph,
+                segment_id=None,
+                source_id=source_id,
+                source_offsets=None,
+                category="expressive prosody",
+                reason="human-selected v3 compromise: three contiguous copies of explicit stretched vowel",
+            ))
+        result = expressive_result
         prepared = prepare_silero_text(result)
         if prepared != result:
             changes.append(ChangeRecord(

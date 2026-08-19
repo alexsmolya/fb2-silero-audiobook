@@ -35,6 +35,19 @@ Commands and relevant outcomes; no hidden reasoning included.
 | Full post-fix pytest | exit 0; 302 passed, 2 warnings, 51 subtests |
 | Rebuilt `BOOK09_10_CORPUS_AUDIT.md/.json` | exit 0; tracked audit artifacts |
 
+## Expressive-vowel production extension
+
+| Command/action | Result |
+|---|---|
+| Human A/B decision applied | v3 selected: exactly 3 contiguous vowels; v4 rejected as inconsistent |
+| Dry-run over expressive audit rows | exit 0; 113 rows, 110 transformed, 3 skipped negative controls, 0 suspicious, 113 lexical-preservation passes |
+| Production transform tests | exit 0; 12 preprocessor tests |
+| Full post-transform pytest | exit 0; 304 passed, 2 warnings, 51 subtests |
+| compileall / `uv lock --check` / `git diff --check` | exit 0 / 0 / 0 |
+
+The standalone initial `О` in book10/chapter4/paragraph79 remains a documented
+Silero model limitation and is not transformed.
+
 Normal push completed after a DNS-related retry using the approved network
 path: `origin/feat/tts-preprocessor-consolidation` at `c88785c043ea...`.
 No merge or force-push is in scope.

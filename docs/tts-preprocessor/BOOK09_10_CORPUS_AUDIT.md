@@ -4,32 +4,18 @@ Generated from local FB2 with the current parser, TtsPreprocessor and SentenceSp
 
 Target occurrence rows: 1072
 
-## Forensic conclusions
+## Expressive-vowel production dry-run
 
-- `замок`: 2/2 occurrences are lock meanings, bounded by `не желал
-  открываться` or `ключ, но`. The resolver preserves modifiers and all
-  surrounding words. No castle occurrence was found; the unit-test negative
-  control `Старый замок стоял на холме` remains unchanged.
-- `среду`: the only occurrence is `А как ты проводишь свою среду`, the
-  confirmed day-of-week construction. The bounded resolver produces `ср+еду`;
-  environment forms such as `среду обитания` remain excluded.
-- `потом`: 34 occurrences were found. Only explicit `а потом`/`и потом` is
-  stressed; standalone temporal `потом` and instrumental `обливаясь потом`
-  remain negative corpus controls.
-- `статью`, `глаза`, `высоты`, `стены`, `нападавших`, `родов`, and `лица`
-  contain ordinary and confirmed constructions; only bounded forms change.
-- `Борисович`: 17 forms occur, including inflections. No existing
-  implementation or corpus negative control justifies a blanket patronymic
-  regex, so production handling remains unresolved.
-- `Галицын`: no occurrence was found in books 9/10; the profile override is
-  not corpus-validated here.
-- `СВУ/СИБ`: 49 occurrences remain unchanged; corpus text alone does not
-  prove spelling versus lexicalized pronunciation.
-- Expressive elongation: 113 occurrences remain unchanged; real-context A/B
-  candidates are in the local long-vowel output directory.
+Human A/B listening selected **v3: exactly three contiguous copies** of the
+explicitly stretched vowel. Across the 113 expressive audit rows, 110 were
+transformed and 3 were intentionally skipped: `эээ`, `Эээ`, and `Фамилиии`
+in book 9. These are ordinary triple/lexical spellings without explicit
+expressive notation. Suspicious cases: 0; all 113 rows passed lexical
+character-preservation checks.
 
-Each JSON row includes the exact FB2 sentence, source ID, inferred class/case,
-current and proposed output, rule IDs, verdict, and MP3 localization fields.
+The standalone initial `О` in book 10 chapter 4 paragraph 79 remains outside
+the transform. Its observed realization as `А` is a separate Silero
+`MODEL_LIMITATION`, not a preprocessing target.
 
 ## Segmentation metrics
 ### Book 9
@@ -44,7 +30,7 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - title_body_boundary_cases: 23
 - punctuation_only_segments: 0
 - empty_segments: 0
-- suspicious_very_short_segments: 291
+- suspicious_very_short_segments: 301
 - suspicious_very_long_segments: 0
 - dialogue_boundary_cases: 14
 - question_ellipsis_interrobang_samples: 1
@@ -56,7 +42,7 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
   - `title_body` p2: — Просыпайся!
   - `paragraph` p3: — Ну еще пять минуточек!
   - `paragraph` p4: Однако уснуть вновь не получилось.
-  - `paragraph` p5: — Да-а-а-ай!
+  - `paragraph` p5: — Дааай!
   - `paragraph` p6: Та, обозначив ехидную улыбку, отступила на пару шагов назад, демонстрируя молодому человеку уже перезаряженный согревающий амулет.
   - `paragraph` p7: — Цып-цып-цып-цып-цыпа!.. — протянула боевик, еще больше разрывая дистанцию.
   - `paragraph` p8: — Да встаю, встаю, — молодой человек, расстегивая спальник.
@@ -80,7 +66,7 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - title_body_boundary_cases: 28
 - punctuation_only_segments: 0
 - empty_segments: 0
-- suspicious_very_short_segments: 305
+- suspicious_very_short_segments: 309
 - suspicious_very_long_segments: 0
 - dialogue_boundary_cases: 14
 - question_ellipsis_interrobang_samples: 0
@@ -117,8 +103,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0001-p-0005 / `Да-а-а-ай`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Да-а-а-ай!
-- current normalized: — Да-а-а-ай!
-- current rule: `none`
+- current normalized: — Дааай!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: 37.08 s; clip: `/tmp/book09-10-forensic/clips/book09_001_expressive_elongation.mp3`
 - negative controls: manual corpus review required
 
@@ -133,8 +119,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0001-p-0038 / `Спа-а-а-асибо`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Спа-а-а-асибо!
-- current normalized: — Спа-а-а-асибо!
-- current rule: `none`
+- current normalized: — Спааасибо!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: 281.78 s; clip: `/tmp/book09-10-forensic/clips/book09_001_expressive_elongation.mp3`
 - negative controls: manual corpus review required
 
@@ -221,8 +207,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0002-p-0054 / `Но-о-ормально`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Но-о-ормально, — оценил Валерыч.
-- current normalized: — Но-о-ормально, — оценил Вал+ерыч.
-- current rule: `lexicon.project`
+- current normalized: — Нооормально, — оценил Вал+ерыч.
+- current rule: `lexicon.project, prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -261,16 +247,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0002-p-0098 / `че-е-е-е-ерт`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Чет че-е-е-е-ерт, — протянул он.
-- current normalized: — Чет че-е-е-е-ерт, — протянул он.
-- current rule: `none`
+- current normalized: — Чет чееерт, — протянул он.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0002-p-0101 / `ка-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Вот ка-а-а-ак⁈
-- current normalized: — Вот ка-а-а-ак?!
-- current rule: `silero.preprocessing`
+- current normalized: — Вот кааак?!
+- current rule: `prosody.expressive_vowel_v3, silero.preprocessing`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -445,8 +431,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0003-p-0124 / `Спаси-и-и-и-и-ибо`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Спаси-и-и-и-и-ибо!
-- current normalized: — Спаси-и-и-и-и-ибо!
-- current rule: `none`
+- current normalized: — Спасииибо!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -533,8 +519,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0004-p-0015 / `Э-э-э`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Э-э-э-й!
-- current normalized: — Э-э-э-й!
-- current rule: `none`
+- current normalized: — ЭЭЭ-й!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -685,8 +671,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0005-p-0020 / `Что-о-о-о`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Что-о-о-о?..
-- current normalized: — Что-о-о-о?..
-- current rule: `none`
+- current normalized: — Чтооо?..
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -733,8 +719,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0005-p-0079 / `Во-о-о-от`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Во-о-о-от…
-- current normalized: — Во-о-о-от…
-- current rule: `none`
+- current normalized: — Вооот…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -805,8 +791,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0006-p-0062 / `ма-а-а-аленькая`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Была всего лишь одна ма-а-а-аленькая проблемка.
-- current normalized: Была всего лишь одна ма-а-а-аленькая проблемка.
-- current rule: `none`
+- current normalized: Была всего лишь одна маааленькая проблемка.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -861,8 +847,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0007-p-0052 / `Та-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Та-а-а-ак, — вздохнул негромко Волконский.
-- current normalized: — Та-а-а-ак, — вздохнул негромко Волконский.
-- current rule: `none`
+- current normalized: — Тааак, — вздохнул негромко Волконский.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -901,16 +887,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0007-p-0068 / `Та-а-а-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Та-а-а-а-а-ак, — вздохнул клановец.
-- current normalized: — Та-а-а-а-а-ак, — вздохнул клановец.
-- current rule: `none`
+- current normalized: — Тааак, — вздохнул клановец.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0007-p-0072 / `Ка-а-а-атя`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ка-а-а-атя!
-- current normalized: — Ка-а-а-атя!
-- current rule: `none`
+- current normalized: — Кааатя!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -957,24 +943,24 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0008-p-0004 / `Чего-о-о`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Чего-о-о⁈
-- current normalized: — Чего-о-о?!
-- current rule: `silero.preprocessing`
+- current normalized: — Чегооо?!
+- current rule: `prosody.expressive_vowel_v3, silero.preprocessing`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0008-p-0005 / `все`
 - class: все/всё; verdict: **OK**
 - FB2 sentence: На его взгляд, все происходящее оценки выше «Ну-у-у-у…
-- current normalized: На его взгляд, все происходящее оценки выше «Ну-у-у-у…
-- current rule: `none`
+- current normalized: На его взгляд, все происходящее оценки выше «Нууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0008-p-0005 / `Ну-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: На его взгляд, все происходящее оценки выше «Ну-у-у-у…
-- current normalized: На его взгляд, все происходящее оценки выше «Ну-у-у-у…
-- current rule: `none`
+- current normalized: На его взгляд, все происходящее оценки выше «Нууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -1061,8 +1047,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0008-p-0053 / `во-о-о-о-он`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Нам во-о-о-о-он в ту арку, — указал пальцем Волконский.
-- current normalized: — Нам во-о-о-о-он в ту арку, — указал пальцем Волконский.
-- current rule: `none`
+- current normalized: — Нам вооон в ту арку, — указал пальцем Волконский.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -1189,8 +1175,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0009-p-0108 / `Во-о-от`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Во-о-от!
-- current normalized: — Во-о-от!
-- current rule: `none`
+- current normalized: — Вооот!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -1541,8 +1527,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0011-p-0126 / `ма-а-аленький`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Вот и думай, Шут, вот и думай, — откинулась на спинку пассажирского сидения культуристка, вполне явно намекая на тот ма-а-аленький факт, что очень уж удачно на месте происшествия оказался сотрудник, который хоть что-то да знал о группе Фролова.
-- current normalized: — Вот и думай, Шут, вот и думай, — откинулась на спинку пассажирского сидения культуристка, вполне явно намекая на тот ма-а-аленький факт, что очень уж удачно на месте происшествия оказался сотрудник, который хоть что-то да знал о группе Фролова.
-- current rule: `none`
+- current normalized: — Вот и думай, Шут, вот и думай, — откинулась на спинку пассажирского сидения культуристка, вполне явно намекая на тот маааленький факт, что очень уж удачно на месте происшествия оказался сотрудник, который хоть что-то да знал о группе Фролова.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -1598,15 +1584,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: все/всё; verdict: **OK**
 - FB2 sentence: Ты же сказал, все будет тихо и спокойно!
 - current normalized: Ты же сказал, все будет тихо и спокойно!
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0011-p-0174 / `Та-а-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Та-а-а-а-ак, братец!
-- current normalized: — Та-а-а-а-ак, братец!
-- current rule: `none`
+- current normalized: — Тааак, братец!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -1629,8 +1615,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0012-p-0008 / `о-о-о-очень`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — о-о-о-очень задумчивого Главу клана, плюхнувшего прямо на лавку уличного столика с какими-то бумагами в руках;
-- current normalized: — о-о-о-очень задумчивого Главу клана, плюхнувшего прямо на лавку уличного столика с какими-то бумагами в руках;
-- current rule: `none`
+- current normalized: — ооочень задумчивого Главу клана, плюхнувшего прямо на лавку уличного столика с какими-то бумагами в руках;
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -1638,15 +1624,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: высоты; verdict: **OK**
 - FB2 sentence: — Допустим, «налог на проживание и содержание имущества в родовом высотном доме» я еще…
 - current normalized: — Допустим, «налог на проживание и содержание имущества в родовом высотном доме» я еще…
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0012-p-0026 / `Та-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Та-а-а-ак, — вздохнул Игорь Георгиевич, поняв, что над ним брат не смеется.
-- current normalized: — Та-а-а-ак, — вздохнул Игорь Георгиевич, поняв, что над ним брат не смеется.
-- current rule: `none`
+- current normalized: — Тааак, — вздохнул Игорь Георгиевич, поняв, что над ним брат не смеется.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -1661,8 +1647,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0012-p-0032 / `Та-а-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Та-а-а-а-ак, — продолжил тот.
-- current normalized: — Та-а-а-а-ак, — продолжил тот.
-- current rule: `none`
+- current normalized: — Тааак, — продолжил тот.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -1765,8 +1751,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0012-p-0075 / `О-О-О-ОЧЕНЬ`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Девушка О-О-О-ОЧЕНЬ рекомендовала обойтись без экспериментов.
-- current normalized: Девушка О-О-О-ОЧЕНЬ рекомендовала обойтись без экспериментов.
-- current rule: `silero.preprocessing`
+- current normalized: Девушка ОООЧЕНЬ рекомендовала обойтись без экспериментов.
+- current rule: `prosody.expressive_vowel_v3, silero.preprocessing`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -1901,8 +1887,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0014-p-0003 / `Ка-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ка-а-а-ак…
-- current normalized: — Ка-а-а-ак…
-- current rule: `none`
+- current normalized: — Кааак…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2037,16 +2023,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0014-p-0094 / `Кха-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Кха-а-а-а…
-- current normalized: — Кха-а-а-а…
-- current rule: `none`
+- current normalized: — Кхааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0014-p-0098 / `Кха-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Кха-а-а-а!..
-- current normalized: — Кха-а-а-а!..
-- current rule: `none`
+- current normalized: — Кхааа!..
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2149,8 +2135,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0015-p-0047 / `Э-э-эй`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Э-э-эй!
-- current normalized: — Э-э-эй!
-- current rule: `none`
+- current normalized: — ЭЭЭй!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2181,8 +2167,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0015-p-0064 / `Да-а-а-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Да-а-а-а-а-а…
-- current normalized: — Да-а-а-а-а-а…
-- current rule: `none`
+- current normalized: — Дааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2294,7 +2280,7 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: все/всё; verdict: **OK**
 - FB2 sentence: Мы все умрем!
 - current normalized: Мы все умрем!
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2302,15 +2288,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: статью; verdict: **OK**
 - FB2 sentence: Клановец даже не стал открывать статью.
 - current normalized: Клановец даже не стал открывать статью.
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0016-p-0025 / `А-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Сразу после выступления из серии «А-а-а-а!..
-- current normalized: Сразу после выступления из серии «А-а-а-а!..
-- current rule: `none`
+- current normalized: Сразу после выступления из серии «ААА!..
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2397,8 +2383,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0017-p-0008 / `Та-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Та-а-а-ак…
-- current normalized: — Та-а-а-ак…
-- current rule: `none`
+- current normalized: — Тааак…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2414,7 +2400,7 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: все/всё; verdict: **OK**
 - FB2 sentence: норм, — решил Павел, все также одним глазом оценив результат.
 - current normalized: норм, — решил Павел, все также одним глазом оценив результат.
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2422,15 +2408,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: глаза; verdict: **OK**
 - FB2 sentence: норм, — решил Павел, все также одним глазом оценив результат.
 - current normalized: норм, — решил Павел, все также одним глазом оценив результат.
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0017-p-0010 / `Ну-у-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну-у-у-у-у…
-- current normalized: — Ну-у-у-у-у…
-- current rule: `none`
+- current normalized: — Нууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2469,24 +2455,24 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0017-p-0036 / `Пу-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Пу-у-у-у-пу-пу-пу-пу-у-у-у…
-- current normalized: — Пу-у-у-у-пу-пу-пу-пу-у-у-у…
-- current rule: `none`
+- current normalized: — Пууу-пу-пу-пу-пууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0017-p-0036 / `пу-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Пу-у-у-у-пу-пу-пу-пу-у-у-у…
-- current normalized: — Пу-у-у-у-пу-пу-пу-пу-у-у-у…
-- current rule: `none`
+- current normalized: — Пууу-пу-пу-пу-пууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0017-p-0036 / `Та-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Та-а-а-ак…
-- current normalized: Та-а-а-ак…
-- current rule: `none`
+- current normalized: что я упустил?
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -2845,8 +2831,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0018-p-0128 / `во-о-от`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну во-о-от, — с укоризной протянула клановец.
-- current normalized: — Ну во-о-от, — с укоризной протянула клановец.
-- current rule: `none`
+- current normalized: — Ну вооот, — с укоризной протянула клановец.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3045,8 +3031,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0019-p-0106 / `Ну-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну-у-у-у…
-- current normalized: — Ну-у-у-у…
-- current rule: `none`
+- current normalized: — Нууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3085,8 +3071,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0019-p-0131 / `йо-о-о-о`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Уй-йо-о-о-о…
-- current normalized: — Уй-йо-о-о-о…
-- current rule: `none`
+- current normalized: — Уй-йооо…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3197,8 +3183,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0019-p-0202 / `Ну-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну-у-у-у…
-- current normalized: — Ну-у-у-у…
-- current rule: `none`
+- current normalized: — Нууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3381,8 +3367,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0020-p-0107 / `ма-а-а-аленький`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Стоит также упомянуть ма-а-а-аленький нюанс: девушка действительно была должна Павлу.
-- current normalized: Стоит также упомянуть ма-а-а-аленький нюанс: девушка действительно была должна Павлу.
-- current rule: `none`
+- current normalized: Стоит также упомянуть маааленький нюанс: девушка действительно была должна Павлу.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3453,16 +3439,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0020-p-0132 / `ма-а-а-аленький`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Это я молчу про тот ма-а-а-аленький фактик, что в корпоративной среде о-о-очень не любят тех, кто привлекает государство к решению «внутренних» вопросов.
-- current normalized: Это я молчу про тот ма-а-а-аленький фактик, что в корпоративной среде о-о-очень не любят тех, кто привлекает государство к решению «внутренних» вопросов.
-- current rule: `none`
+- current normalized: Это я молчу про тот маааленький фактик, что в корпоративной среде ооочень не любят тех, кто привлекает государство к решению «внутренних» вопросов.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0020-p-0132 / `о-о-очень`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Это я молчу про тот ма-а-а-аленький фактик, что в корпоративной среде о-о-очень не любят тех, кто привлекает государство к решению «внутренних» вопросов.
-- current normalized: Это я молчу про тот ма-а-а-аленький фактик, что в корпоративной среде о-о-очень не любят тех, кто привлекает государство к решению «внутренних» вопросов.
-- current rule: `none`
+- current normalized: Это я молчу про тот маааленький фактик, что в корпоративной среде ооочень не любят тех, кто привлекает государство к решению «внутренних» вопросов.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3661,8 +3647,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0021-p-0055 / `А-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — А-а-а-а…
-- current normalized: — А-а-а-а…
-- current rule: `none`
+- current normalized: — ААА…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3685,8 +3671,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0021-p-0071 / `Бу-э-э-э-э`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Бу-э-э-э-э!..
-- current normalized: — Бу-э-э-э-э!..
-- current rule: `none`
+- current normalized: — Буэээ!..
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3710,15 +3696,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: потом; verdict: **OK**
 - FB2 sentence: Но потом сжечь!
 - current normalized: Но потом сжечь!
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0021-p-0097 / `Ну-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Ну-у-у-у, она же красивая…
-- current normalized: Ну-у-у-у, она же красивая…
-- current rule: `none`
+- current normalized: Нууу, она же красивая…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3757,24 +3743,24 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0021-p-0116 / `Э-э-э-э-эй`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Э-э-э-э-эй!
-- current normalized: — Э-э-э-э-эй!
-- current rule: `none`
+- current normalized: — ЭЭЭй!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0021-p-0123 / `Не-е-е-е`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Не-е-е-е, — протянула Кошкина, окинув шутливо-насмешливым взглядом «гостя».
-- current normalized: — Не-е-е-е, — протянула Кошкина, окинув шутливо-насмешливым взглядом «гостя».
-- current rule: `lexicon.project`
+- current normalized: — Неее, — протянула Кошкина, окинув шутливо-насмешливым взглядом «гостя».
+- current rule: `lexicon.project, prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0021-p-0130 / `Све-е-е-ета`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Све-е-е-ета!
-- current normalized: — Све-е-е-ета!
-- current rule: `none`
+- current normalized: — Свееета!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3789,16 +3775,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0021-p-0132 / `привее-е-е-е-е-е`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Всем привее-е-е-е-е-е…
-- current normalized: — Всем привее-е-е-е-е-е…
-- current rule: `none`
+- current normalized: — Всем привеее…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0021-p-0132 / `А-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — А-а-а-а?..
-- current normalized: — А-а-а-а?..
-- current rule: `none`
+- current normalized: Кхм.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3829,8 +3815,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0022-p-0004 / `Фу-у-у-ух`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Фу-у-у-ух, — протяжно выдохнул Волконский, первым сбрасывая странное оцепенение.
-- current normalized: — Фу-у-у-ух, — протяжно выдохнул Волконский, первым сбрасывая странное оцепенение.
-- current rule: `none`
+- current normalized: — Фууух, — протяжно выдохнул Волконский, первым сбрасывая странное оцепенение.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -3933,8 +3919,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0022-p-0073 / `Фу-у-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Фу-у-у-у-у!
-- current normalized: — Фу-у-у-у-у!
-- current rule: `none`
+- current normalized: — Фууу!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -4141,16 +4127,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0022-p-0175 / `эта-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Че, эта-а-а-а…
-- current normalized: — Че, эта-а-а-а…
-- current rule: `none`
+- current normalized: — Че, этааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 9 / ch-0022-p-0178 / `Эта-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Эта-а-а-а…
-- current normalized: — Эта-а-а-а…
-- current rule: `silero.preprocessing`
+- current normalized: — Этааа…
+- current rule: `prosody.expressive_vowel_v3, silero.preprocessing`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -4269,8 +4255,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0023-p-0009 / `йе-е-е-о-о-о`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Уй-йе-е-е-о-о-о…
-- current normalized: — Уй-йе-е-е-о-о-о…
-- current rule: `none`
+- current normalized: — Уй-йеееооо…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -4333,8 +4319,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 9 / ch-0023-p-0025 / `Отпусти-и-и-и`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Отпусти-и-и-и!
-- current normalized: — Отпусти-и-и-и!
-- current rule: `none`
+- current normalized: — Отпустиии!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -4565,8 +4551,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0003-p-0014 / `о-о-очень`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Есть так, — о-о-очень привычно ответила девушка, уже склонившись к консоли управления.
-- current normalized: — Есть так, — о-о-очень привычно ответила девушка, уже склонившись к консоли управления.
-- current rule: `none`
+- current normalized: — Есть так, — ооочень привычно ответила девушка, уже склонившись к консоли управления.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -4589,16 +4575,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0003-p-0052 / `Была-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Была-а-а-а…
-- current normalized: — Была-а-а-а…
-- current rule: `none`
+- current normalized: — Былааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0003-p-0052 / `болела-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Я болела-а-а…
-- current normalized: — Я болела-а-а…
-- current rule: `none`
+- current normalized: — Я болелааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -4845,8 +4831,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0004-p-0079 / `да-а-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — О да-а-а-а-а…
-- current normalized: — О да-а-а-а-а…
-- current rule: `none`
+- current normalized: — О дааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -4933,16 +4919,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0005-p-0058 / `меня-я-я-я`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Не начинайте без меня-я-я-я!!!
-- current normalized: — Не начинайте без меня-я-я-я!!!
-- current rule: `none`
+- current normalized: — Не начинайте без меняяя!!!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0005-p-0060 / `не-е-е-ет`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Да не-е-е-ет…
-- current normalized: — Да не-е-е-ет…
-- current rule: `none`
+- current normalized: — Да нееет…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -5061,8 +5047,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0006-p-0080 / `Что-о-о-о`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: До обостренного до крайности слуха Волконского донеслось удивленно-протяжное «Что-о-о-о⁈
-- current normalized: До обостренного до крайности слуха Волконского донеслось удивленно-протяжное «Что-о-о-о?!
-- current rule: `silero.preprocessing`
+- current normalized: До обостренного до крайности слуха Волконского донеслось удивленно-протяжное «Чтооо?!
+- current rule: `prosody.expressive_vowel_v3, silero.preprocessing`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -5357,32 +5343,32 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0008-p-0068 / `Юля-а-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Юля-а-а-а-а…
-- current normalized: — Юля-а-а-а-а…
-- current rule: `lexicon.project`
+- current normalized: — Юляааа…
+- current rule: `lexicon.project, prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0008-p-0069 / `Вито-о-о-ория`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Вито-о-о-ория-а-а-а-а-а Львовна-а-а-а-а…
-- current normalized: — Вито-о-о-ория-а-а-а-а-а Львовна-а-а-а-а…
-- current rule: `none`
+- current normalized: — Витооорияааа Львовнааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0008-p-0069 / `а-а-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Вито-о-о-ория-а-а-а-а-а Львовна-а-а-а-а…
-- current normalized: — Вито-о-о-ория-а-а-а-а-а Львовна-а-а-а-а…
-- current rule: `none`
+- current normalized: — Витооорияааа Львовнааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0008-p-0069 / `Львовна-а-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Вито-о-о-ория-а-а-а-а-а Львовна-а-а-а-а…
-- current normalized: — Вито-о-о-ория-а-а-а-а-а Львовна-а-а-а-а…
-- current rule: `none`
+- current normalized: — с трудом выдавила из себя та, попытавшись напомнить старшей подружке о клановом этикете.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -5533,16 +5519,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0009-p-0097 / `потом`
 - class: потом; verdict: **OK**
 - FB2 sentence: Несколько секунд Лев Демидович всматривался в «послание», а потом ка-а-ак понял…
-- current normalized: Несколько секунд Лев Дем+идович всматривался в «послание», а пот+ом ка-а-ак понял…
-- current rule: `lexicon.project, phrase.potom`
+- current normalized: Несколько секунд Лев Дем+идович всматривался в «послание», а пот+ом кааак понял…
+- current rule: `lexicon.project, phrase.potom, prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0009-p-0097 / `ка-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Несколько секунд Лев Демидович всматривался в «послание», а потом ка-а-ак понял…
-- current normalized: Несколько секунд Лев Дем+идович всматривался в «послание», а пот+ом ка-а-ак понял…
-- current rule: `lexicon.project, phrase.potom`
+- current normalized: Несколько секунд Лев Дем+идович всматривался в «послание», а пот+ом кааак понял…
+- current rule: `lexicon.project, phrase.potom, prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -5685,8 +5671,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0010-p-0115 / `Во-о-от`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Во-о-от…
-- current normalized: — Во-о-от…
-- current rule: `none`
+- current normalized: — Вооот…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -5725,8 +5711,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0011-p-0008 / `Ну-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну-у-у-у…
-- current normalized: — Ну-у-у-у…
-- current rule: `none`
+- current normalized: — Нууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -5742,15 +5728,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: все/всё; verdict: **OK**
 - FB2 sentence: Во-первых, совсем скоро ему понадобятся все силы (хотя речь в первую очередь про душевные!
 - current normalized: Во-первых, совсем скоро ему понадобятся все силы (хотя речь в первую очередь про душевные!
-- current rule: `lexicon.project`
+- current rule: `lexicon.project, prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0011-p-0015 / `мля-я-я-я-я`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: «Да мля-я-я-я-я…
-- current normalized: «Да мля-я-я-я-я…
-- current rule: `lexicon.project`
+- current normalized: «Да мляяя…
+- current rule: `lexicon.project, prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -5789,8 +5775,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0011-p-0050 / `Ка-а-ать`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ка-а-ать…
-- current normalized: — Ка-а-ать…
-- current rule: `none`
+- current normalized: — Кааать…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -5877,8 +5863,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0011-p-0180 / `йяа-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Скотина, — глухо выдохнула Виктория, и тут же взмахнула плетью с диким криком «Ай-йяа-а-а-а!
-- current normalized: — Скотина, — глухо выдохнула Виктория, и тут же взмахнула плетью с диким криком «Ай-йяа-а-а-а!
-- current rule: `none`
+- current normalized: — Скотина, — глухо выдохнула Виктория, и тут же взмахнула плетью с диким криком «Ай-йяааа!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -5926,15 +5912,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: все/всё; verdict: **OK**
 - FB2 sentence: — завопила Мышкина во все горло.
 - current normalized: — завопила Мышкина во все горло.
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0012-p-0013 / `А-а-а-а-а-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — А-а-а-а-а-а-а-а!!!
-- current normalized: — А-а-а-а-а-а-а-а!!!
-- current rule: `none`
+- current normalized: — ААА!!!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6037,8 +6023,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0012-p-0086 / `ла-а-а-адно`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ой, да ла-а-а-адно, — разнесся от двери раздраженный голос.
-- current normalized: — Ой, да ла-а-а-адно, — разнесся от двери раздраженный голос.
-- current rule: `none`
+- current normalized: — Ой, да лааадно, — разнесся от двери раздраженный голос.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6053,8 +6039,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0012-p-0088 / `здра-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Всем здра-а-а-а-сть, — зло выдохнул он.
-- current normalized: — Всем здра-а-а-а-сть, — зло выдохнул он.
-- current rule: `none`
+- current normalized: — Всем здрааа-сть, — зло выдохнул он.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6117,8 +6103,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0013-p-0011 / `ЧТО-О-О-О`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — ЧТО-О-О-О⁈
-- current normalized: — ЧТО-О-О-О?!
-- current rule: `silero.preprocessing`
+- current normalized: — ЧТООО?!
+- current rule: `prosody.expressive_vowel_v3, silero.preprocessing`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6205,8 +6191,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0013-p-0077 / `во-о-от`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну во-о-от…
-- current normalized: — Ну во-о-от…
-- current rule: `none`
+- current normalized: — Ну вооот…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6429,8 +6415,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0014-p-0071 / `Та-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Та-а-а-ак…
-- current normalized: — Та-а-а-ак…
-- current rule: `none`
+- current normalized: — Тааак…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6549,8 +6535,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0015-p-0072 / `ВЖУ-У-УХ`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: ВЖУ-У-УХ!
-- current normalized: ВЖУ-У-УХ!
-- current rule: `none`
+- current normalized: ВЖУУУХ!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6581,8 +6567,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0016-p-0007 / `Фу-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Фу-у-у-ф…
-- current normalized: — Фу-у-у-ф…
-- current rule: `none`
+- current normalized: — Фууу-ф…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6597,16 +6583,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0016-p-0022 / `Прекра-а-а-асно`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Прекра-а-а-асно, — протянул Глава, с великим тщанием устанавливая очередной «кирпичик» на законное место.
-- current normalized: — Прекра-а-а-асно, — протянул Глава, с великим тщанием устанавливая очередной «кирпичик» на законное место.
-- current rule: `none`
+- current normalized: — Прекрааасно, — протянул Глава, с великим тщанием устанавливая очередной «кирпичик» на законное место.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0016-p-0027 / `Фу-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Фу-у-у-у…
-- current normalized: — Фу-у-у-у…
-- current rule: `none`
+- current normalized: — Фууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6629,8 +6615,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0016-p-0055 / `Та-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Та-а-а-ак!
-- current normalized: — Та-а-а-ак!
-- current rule: `none`
+- current normalized: — Тааак!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -6709,8 +6695,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0017-p-0003 / `во-о-о-о-он`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Нет, зная Павла, можно, конечно, предположить, что во-о-о-о-он тот ржавый чуть ли не до сквозных дыр микроавтобус или откровенно ушатаный седан, возле которого постоянно крутилась компашка довольно маргинального вида (девушка частенько наблюдала за ними в окно) дожидается именно их.
-- current normalized: Нет, зная Павла, можно, конечно, предположить, что во-о-о-о-он тот ржавый чуть ли не до сквозных дыр микроавтобус или откровенно ушатаный седан, возле которого постоянно крутилась компашка довольно маргинального вида (девушка частенько наблюдала за ними в окно) дожидается именно их.
-- current rule: `lexicon.project`
+- current normalized: Нет, зная Павла, можно, конечно, предположить, что вооон тот ржавый чуть ли не до сквозных дыр микроавтобус или откровенно ушатаный седан, возле которого постоянно крутилась компашка довольно маргинального вида (девушка частенько наблюдала за ними в окно) дожидается именно их.
+- current rule: `lexicon.project, prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -7022,15 +7008,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: глаза; verdict: **OK**
 - FB2 sentence: — чуть запнулась Светлана Волконская, краем глаза заметив наблюдателей.
 - current normalized: — чуть запнулась Светлана Волконская, краем глаза заметив наблюдателей.
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0018-p-0138 / `Ви-и-и-и`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Держи, Ви-и-и-и…
-- current normalized: — Держи, Ви-и-и-и…
-- current rule: `none`
+- current normalized: — Держи, Виии…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -7237,8 +7223,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0020-p-0048 / `Э-э-эй`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Э-э-эй!
-- current normalized: — Э-э-эй!
-- current rule: `none`
+- current normalized: — ЭЭЭй!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -7549,8 +7535,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0022-p-0114 / `здра-а-а-асти`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну, здра-а-а-асти!
-- current normalized: — Ну, здра-а-а-асти!
-- current rule: `none`
+- current normalized: — Ну, здрааасти!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -7565,8 +7551,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0023-p-0004 / `здра-а-а-асти`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Просто попытался помочь определиться с ответом на его протяжное «здра-а-а-асти»…
-- current normalized: Просто попытался помочь определиться с ответом на его протяжное «здра-а-а-асти»…
-- current rule: `none`
+- current normalized: Просто попытался помочь определиться с ответом на его протяжное «здрааасти»…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -7757,32 +7743,32 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0023-p-0142 / `Ни-и-и-ика`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ни-и-и-ика Андреевна-а-а-а…
-- current normalized: — Ни-и-и-ика Андреевна-а-а-а…
-- current rule: `none`
+- current normalized: — Нииика Андреевнааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0023-p-0142 / `Андреевна-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ни-и-и-ика Андреевна-а-а-а…
-- current normalized: — Ни-и-и-ика Андреевна-а-а-а…
-- current rule: `none`
+- current normalized: — Нииика Андреевнааа…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0023-p-0142 / `Семео-о-он`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — протянул Глава с интонациями героя очень древнего фильма: «Семео-о-он Семео-о-о-оныч!
-- current normalized: — протянул Глава с интонациями героя очень древнего фильма: «Семео-о-он Семео-о-о-оныч!
-- current rule: `none`
+- current normalized: — протянул Глава с интонациями героя очень древнего фильма: «Семеооон Семеоооныч!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0023-p-0142 / `Семео-о-о-оныч`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — протянул Глава с интонациями героя очень древнего фильма: «Семео-о-он Семео-о-о-оныч!
-- current normalized: — протянул Глава с интонациями героя очень древнего фильма: «Семео-о-он Семео-о-о-оныч!
-- current rule: `none`
+- current normalized: — протянул Глава с интонациями героя очень древнего фильма: «Семеооон Семеоооныч!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -7885,8 +7871,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0024-p-0027 / `Фшу-у-у-ух`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Фшу-у-у-ух!
-- current normalized: Фшу-у-у-ух!
-- current rule: `none`
+- current normalized: Фшууух!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -7926,15 +7912,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: все/всё; verdict: **OK**
 - FB2 sentence: Ведь благодаря чертовому расписанию, он попросту не имел возможности беззаботно помахать «уралочке» рукой со словами «Ну, все, удачи!
 - current normalized: Ведь благодаря чертовому расписанию, он попросту не имел возможности беззаботно помахать «уралочке» рукой со словами «Ну, все, удачи!
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0024-p-0038 / `все`
 - class: все/всё; verdict: **OK**
 - FB2 sentence: Не-е-ет, на этой неделе почти все занятия у них были совместными.
-- current normalized: Не-е-ет, на этой неделе почти все занятия у них были совместными.
-- current rule: `none`
+- current normalized: Нееет, на этой неделе почти все занятия у них были совместными.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -7942,15 +7928,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: все/всё; verdict: **OK**
 - FB2 sentence: А ведь за все возможные зверства и разрушения рук «принцессы», как Главе Рода, отвечать придется именно ему.
 - current normalized: А ведь за все возможные зверства и разрушения рук «принцессы», как Главе Рода, отвечать придется именно ему.
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0024-p-0038 / `Не-е-ет`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: Не-е-ет, на этой неделе почти все занятия у них были совместными.
-- current normalized: Не-е-ет, на этой неделе почти все занятия у них были совместными.
-- current rule: `none`
+- current normalized: Нееет, на этой неделе почти все занятия у них были совместными.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -7997,8 +7983,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0024-p-0051 / `Фу-у-у-у-у-ух`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Фу-у-у-у-у-ух-х-х…
-- current normalized: — Фу-у-у-у-у-ух-х-х…
-- current rule: `none`
+- current normalized: — Фууух-х-х…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8150,15 +8136,15 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: все/всё; verdict: **OK**
 - FB2 sentence: И да, вы все не правы.
 - current normalized: И да, вы все не правы.
-- current rule: `none`
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0025-p-0017 / `Не-е-е-е`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Не-е-е-е, — секунд через пять вынуждена была констатировать Тишь.
-- current normalized: — Не-е-е-е, — секунд через пять вынуждена была констатировать Тишь.
-- current rule: `none`
+- current normalized: — Неее, — секунд через пять вынуждена была констатировать Тишь.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8197,8 +8183,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0025-p-0024 / `Ну-у-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну-у-у-у-у, — разочарованно протянула валькирия, пригорюнившись, но тут же переключилась на новый объект.
-- current normalized: — Ну-у-у-у-у, — разочарованно протянула валькирия, пригорюнившись, но тут же переключилась на новый объект.
-- current rule: `silero.preprocessing`
+- current normalized: — Нууу, — разочарованно протянула валькирия, пригорюнившись, но тут же переключилась на новый объект.
+- current rule: `prosody.expressive_vowel_v3, silero.preprocessing`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8213,16 +8199,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0025-p-0031 / `Девочки-и-и-и`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Как поесть приготовить на выходе так «Девочки-и-и-и!
-- current normalized: — Как поесть приготовить на выходе так «Девочки-и-и-и!
-- current rule: `none`
+- current normalized: — Как поесть приготовить на выходе так «Девочкиии!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0025-p-0034 / `Пи-и-и-и-ить`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Пи-и-и-и-ить, — с трудом выдавил Волконский.
-- current normalized: — Пи-и-и-и-ить, — с трудом выдавил Волконский.
-- current rule: `none`
+- current normalized: — Пииить, — с трудом выдавил Волконский.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8269,16 +8255,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0025-p-0058 / `много-о-о`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: У меня дел еще много-о-о!..
-- current normalized: У меня дел еще много-о-о!..
-- current rule: `none`
+- current normalized: У меня дел еще многооо!..
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0025-p-0059 / `Та-а-а-ак`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Та-а-а-ак, — протянул парень негромко.
-- current normalized: — Та-а-а-ак, — протянул парень негромко.
-- current rule: `silero.preprocessing`
+- current normalized: — Тааак, — протянул парень негромко.
+- current rule: `prosody.expressive_vowel_v3, silero.preprocessing`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8293,8 +8279,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0026-p-0004 / `не-е-е-е`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Не-не-не-не-не-е-е-е!
-- current normalized: — Не-не-не-не-не-е-е-е!
-- current rule: `none`
+- current normalized: — Не-не-не-не-неее!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8373,16 +8359,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0026-p-0025 / `Приве-е-е-е-ет`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Приве-е-е-е-ет!
-- current normalized: — Приве-е-е-е-ет!
-- current rule: `none`
+- current normalized: — Привееет!
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0026-p-0041 / `Ну-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну-у-у-у, — деланно нахмурилась Лика и, к ужасу подружки, картинно ударила кулачком в грудь молодого человека.
-- current normalized: — Ну-у-у-у, — деланно нахмурилась Лика и, к ужасу подружки, картинно ударила кулачком в грудь молодого человека.
-- current rule: `none`
+- current normalized: — Нууу, — деланно нахмурилась Лика и, к ужасу подружки, картинно ударила кулачком в грудь молодого человека.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8397,8 +8383,8 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0026-p-0045 / `Аа-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Аа-а-а-а, молодой господин, — слово «господин» телеведущая выдала в своем неповторимом стиле, обезоруживающе улыбнувшись.
-- current normalized: — Аа-а-а-а, молодой господин, — слово «господин» телеведущая выдала в своем неповторимом стиле, обезоруживающе улыбнувшись.
-- current rule: `none`
+- current normalized: — ААА, молодой господин, — слово «господин» телеведущая выдала в своем неповторимом стиле, обезоруживающе улыбнувшись.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8437,16 +8423,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0026-p-0079 / `Пу-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Пу-у-у-у-пу-пу-пу-пу-у-у-у…
-- current normalized: — Пу-у-у-у-пу-пу-пу-пу-у-у-у…
-- current rule: `none`
+- current normalized: — Пууу-пу-пу-пу-пууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0026-p-0079 / `пу-у-у-у`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Пу-у-у-у-пу-пу-пу-пу-у-у-у…
-- current normalized: — Пу-у-у-у-пу-пу-пу-пу-у-у-у…
-- current rule: `none`
+- current normalized: — Пууу-пу-пу-пу-пууу…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8533,16 +8519,16 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 ### Book 10 / ch-0027-p-0026 / `А-а-а-а`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — А-а-а-а…
-- current normalized: — А-а-а-а…
-- current rule: `none`
+- current normalized: — ААА…
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
 ### Book 10 / ch-0027-p-0038 / `Ма-а-а-акс`
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ма-а-а-акс, — нескрываемым раздражением протянул клановец.
-- current normalized: — Ма-а-а-акс, — нескрываемым раздражением протянул клановец.
-- current rule: `none`
+- current normalized: — Мааакс, — нескрываемым раздражением протянул клановец.
+- current rule: `prosody.expressive_vowel_v3`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
@@ -8566,7 +8552,7 @@ current and proposed output, rule IDs, verdict, and MP3 localization fields.
 - class: expressive elongation; verdict: **UNRESOLVED**
 - FB2 sentence: — Ну, с*-*-*-*-*а-а-а…
 - current normalized: — протянула он и с неожиданной даже для самого себя злостью припечатал.
-- current rule: `silero.preprocessing`
+- current rule: `prosody.expressive_vowel_v3, silero.preprocessing`
 - approximate MP3: None s; clip: `None`
 - negative controls: manual corpus review required
 
