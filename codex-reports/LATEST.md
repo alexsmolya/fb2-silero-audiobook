@@ -4,10 +4,11 @@
 - Run log: `codex-reports/logs/2026-08-19_tts-preprocessor-consolidation_RUNLOG.md`
 - Task: consolidate deterministic Russian TTS preprocessing before segmentation
 - Engineering branch: `feat/tts-preprocessor-consolidation`
-- Engineering SHA: `1d692b8f39bf7d6fbeaf77511999c0e7a055685f`
+- Engineering SHA: `2770d96c71cb32bc681968336b133850b011afde`
 - Verification: 304 passed, 51 subtests; 113 expressive rows dry-run; real books 9/10 audited; compileall, lock check, diff check
 - Local production: Silero end-to-end smoke passed; launcher refreshed; GUI display check environment-limited
 - Status: ready for Drive-first review; Git remains secondary archival publication
+- Push: normal push to `origin/feat/tts-preprocessor-consolidation` succeeded
 - Timestamp: 2026-08-19 (Europe/Stockholm)
 
 ## Previous report

@@ -77,3 +77,5 @@ hit a Google Drive API quota limit, then the bounded retry succeeded and the
 report checksum matched local content. The local-production documentation was
 committed after that handoff as
 `1d692b8f39bf7d6fbeaf77511999c0e7a055685f`. No merge or force-push is in scope.
+Normal archival push then succeeded:
+`bb36466..2770d96 feat/tts-preprocessor-consolidation -> feat/tts-preprocessor-consolidation`.

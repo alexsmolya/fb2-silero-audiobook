@@ -211,7 +211,7 @@ the unchanged pause/audio paths.
 ## Git/publication
 
 The local validation and pre-archive Drive handoff were read back before the
-archival commit. Final local-production documentation is committed as
-`1d692b8f39bf7d6fbeaf77511999c0e7a055685f`; the feature branch is ready for a
-normal push. Git remains secondary archival publication. No merge, rebase,
-force-push, or upstream action is in scope.
+archival commit. The final local-production documentation was committed as
+`1d692b8f39bf7d6fbeaf77511999c0e7a055685f`, and the branch was pushed normally
+to `origin/feat/tts-preprocessor-consolidation`. Git remains secondary archival
+publication. No merge, rebase, force-push, or upstream action is in scope.
