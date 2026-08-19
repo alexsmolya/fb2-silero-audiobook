@@ -4,8 +4,8 @@
 - Run log: `codex-reports/logs/2026-08-19_tts-preprocessor-consolidation_RUNLOG.md`
 - Task: consolidate deterministic Russian TTS preprocessing before segmentation
 - Engineering branch: `feat/tts-preprocessor-consolidation`
-- Engineering SHA: `34033a887e797a7cc5a456d9cf589ab0e5b3b8be`
-- Verification: 301 passed, 51 subtests, compileall, lock check, diff check
+- Engineering SHA: current forensic extension on `feat/tts-preprocessor-consolidation`
+- Verification: 302 passed, 51 subtests; real books 9/10 audited; compileall, lock check, diff check
 - Status: ready for review; feature branch pushed normally
 - Timestamp: 2026-08-19 (Europe/Stockholm)
 

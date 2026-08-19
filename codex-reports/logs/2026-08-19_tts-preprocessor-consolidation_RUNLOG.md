@@ -22,6 +22,19 @@ Commands and relevant outcomes; no hidden reasoning included.
 | Short artifact smoke | exit 0; `.tts.md` and `.tts-changes.json` created under `/tmp/audiobook-tts-smoke.pY6a0m` |
 | `git commit -m 'feat: consolidate deterministic TTS preprocessing'` | exit 0; `34033a887e797a7cc5a456d9cf589ab0e5b3b8be` |
 
+## Corpus forensic extension
+
+| Command/action | Result |
+|---|---|
+| Parse books 9/10 + compile + split without synthesis | exit 0; 23/28 chapters, 2819/2872 paragraphs, 6394/6387 segments |
+| Target occurrence extraction | exit 0; 1072 rows, 533 book 9 and 539 book 10 |
+| Real corpus token-preservation audit | exit 0; no non-heading, non-censor lexical loss |
+| Fix lock modifier loss and bounded `проводишь свою среду` | implemented; focused tests passed |
+| Real-context long-vowel Silero smoke | exit 0; 16 MP3 files, four phrases × original/3/4/5 |
+| Focused post-fix pytest | exit 0; 69 passed, 1 warning, 7 subtests |
+| Full post-fix pytest | exit 0; 302 passed, 2 warnings, 51 subtests |
+| Rebuilt `BOOK09_10_CORPUS_AUDIT.md/.json` | exit 0; tracked audit artifacts |
+
 Normal push completed after a DNS-related retry using the approved network
 path: `origin/feat/tts-preprocessor-consolidation` at `c88785c043ea...`.
 No merge or force-push is in scope.

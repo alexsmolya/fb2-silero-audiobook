@@ -81,6 +81,18 @@ def test_context_rules_keep_required_negative_controls() -> None:
     )).chapters[0].paragraphs[0] == "Старый замок стоял на холме."
     assert compiler.compile_book(ParsedBook(
         metadata=BookMetadata(lang="ru"),
+        chapters=[Chapter(paragraphs=["Дверной замок был закрыт."])]
+    )).chapters[0].paragraphs[0] == "Дверной зам+ок был закрыт."
+    assert compiler.compile_book(ParsedBook(
+        metadata=BookMetadata(lang="ru"),
+        chapters=[Chapter(paragraphs=["Замок явно не желал открываться."])]
+    )).chapters[0].paragraphs[0] == "Зам+ок явно не желал открываться."
+    assert compiler.compile_book(ParsedBook(
+        metadata=BookMetadata(lang="ru"),
+        chapters=[Chapter(paragraphs=["Ключ, но замок послушно отозвался."])]
+    )).chapters[0].paragraphs[0] == "Ключ, но зам+ок послушно отозвался."
+    assert compiler.compile_book(ParsedBook(
+        metadata=BookMetadata(lang="ru"),
         chapters=[Chapter(paragraphs=["В сторону стены он не смотрел."])]
     )).chapters[0].paragraphs[0] == "В сторону стен+ы он не смотрел."
 
@@ -96,7 +108,7 @@ def test_confirmed_journal_cases_are_narrow_and_deterministic() -> None:
         "А потом стало тихо.": "А пот+ом стало тихо.",
         "открывать глаза": "открывать глаз+а",
         "В среду встретимся.": "В ср+еду встретимся.",
-        "дверной замок": "зам+ок",
+        "дверной замок": "дверной зам+ок",
         "с королевской статью": "с королевской ст+атью",
         "не с чем": "н+е с чем",
         "Я высоты боюсь": "Я высот+ы боюсь",
@@ -118,6 +130,30 @@ def test_confirmed_journal_cases_are_narrow_and_deterministic() -> None:
         metadata=BookMetadata(lang="ru"),
         chapters=[Chapter(paragraphs=["холодным потом"])]
     )).chapters[0].paragraphs[0] == "холодным потом"
+    assert compiler.compile_book(ParsedBook(
+        metadata=BookMetadata(lang="ru"),
+        chapters=[Chapter(paragraphs=["А как ты проводишь свою среду?"])]
+    )).chapters[0].paragraphs[0] == "А как ты проводишь свою ср+еду?"
+
+
+def test_context_rules_preserve_lexical_tokens() -> None:
+    import re
+
+    compiler = TtsPreprocessor(backend="silero")
+    cases = [
+        "Дверной замок был закрыт.",
+        "А как ты проводишь свою среду?",
+        "с королевской статью повернув голову",
+        "четверо нападавших вошли",
+        "красноте лица не придавали значения",
+    ]
+    for source in cases:
+        normalized = compiler.compile_book(ParsedBook(
+            metadata=BookMetadata(lang="ru"),
+            chapters=[Chapter(paragraphs=[source])],
+        )).chapters[0].paragraphs[0]
+        tokens = lambda text: re.findall(r"[а-яё]+", text.casefold().replace("+", ""))
+        assert tokens(normalized) == tokens(source), (source, normalized)
 
 
 def test_galitsyn_is_an_explicit_book_profile_override() -> None:

@@ -46,6 +46,9 @@ test_audio/
 # Temp audio from Piper/Edge TTS fallback directory
 temp_audio/
 
+# Local real-corpus forensic outputs (FB2/MP3 clips and audit sidecars)
+forensic-output/
+
 # Piper voice model cache (if downloaded into project)
 *.onnx
 *.onnx.json

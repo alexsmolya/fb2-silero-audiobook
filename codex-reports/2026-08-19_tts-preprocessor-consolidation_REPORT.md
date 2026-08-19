@@ -65,12 +65,45 @@ patronymic regexes, and long-vowel heuristics were honored.
 ## Validation
 
 - Baseline focused suite before changes: 59 passed, 1 warning, 7 subtests.
-- New preprocessor suite: 9 passed.
-- Full suite: **301 passed, 2 warnings, 51 subtests passed**, exit 0.
+- New preprocessor suite: 10 passed.
+- Focused regression suite: **69 passed, 1 warning, 7 subtests passed**, exit 0.
+- Full suite: **302 passed, 2 warnings, 51 subtests passed**, exit 0.
 - `python -m compileall -q src tests`: exit 0.
 - `uv lock --check`: exit 0 (`Resolved 123 packages`).
 - `git diff --check`: exit 0.
 - Local model availability check: `v5_5_ru` found at the existing local cache.
+
+## Real book 09/10 forensic pass
+
+The corpus paths were confirmed locally and were not copied into Git. The
+row-level audit is `docs/tts-preprocessor/BOOK09_10_CORPUS_AUDIT.md` with JSON
+sidecar `docs/tts-preprocessor/BOOK09_10_CORPUS_AUDIT.json`. It contains 1072
+target rows: 533 from book 9 and 539 from book 10. The source and normalized
+paragraph counts are unchanged: 2819/2819 and 2872/2872.
+
+| Metric | Book 9 | Book 10 |
+|---|---:|---:|
+| Chapters | 23 | 28 |
+| Segments | 6394 | 6387 |
+| Paragraph crossings | 0 | 0 |
+| Accidental title/body merges | 0 | 0 |
+| Intended title/body boundary cases | 23 | 28 |
+| Punctuation-only / empty segments | 0 / 0 | 0 / 0 |
+| Very-short segments (<12 chars) | 291 | 305 |
+| Very-long segments (>1200 chars) | 0 | 0 |
+| Dialogue boundary samples | 14 | 14 |
+
+The real corpus exposed and fixed two defects: the lock resolver previously
+discarded modifiers (`дверной замок`), and the day-of-week resolver only
+covered `в среду`, missing `проводишь свою среду`. The new rules preserve all
+lexical tokens. A corpus-wide token audit found no non-heading, non-censor
+lexical loss; remaining heading differences are the intentional chapter-number
+normalization.
+
+The local ignored forensic directory is `forensic-output/book09-10/` and
+contains five approximate MP3 localization clips plus the real-context
+long-vowel A/B directory. MP3 localization is paragraph-ratio based; it is
+not reliable alignment and cannot establish stress.
 
 ## Artifact and audio smoke
 
@@ -80,13 +113,13 @@ A short pipeline smoke produced:
 - `/tmp/audiobook-tts-smoke.pY6a0m/smoke-book.tts-changes.json` (1764 bytes)
 - 2 segment rows and 3 traceable change records.
 
-The controlled long-vowel smoke used the existing local Silero model and
-generated 16 MP3 fragments (2/3/5 repeats for `о`, `а`, `у`, plus seven
-expressive phrases) under `/tmp/audiobook-long-vowels.iHFhLA`; its result JSON
-is `/tmp/audiobook-long-vowels.iHFhLA/results.json`. Synthesis succeeded, but
-there was no automated perceptual evidence of a continuous vowel in this
-environment and no human listening step was available. Therefore the result
-is `MODEL_LIMITATION/UNRESOLVED`, and no production transform was introduced.
+The real-context long-vowel smoke used the existing local Silero model and
+generated 16 MP3 fragments under `forensic-output/book09-10/long-vowel-real-context/`:
+four actual FB2 phrases, each with original/3/4/5-vowel candidates. Examples
+include `Да-а-а-ай`, `Но-о-ормально`, `о-о-очень`, and `да-а-а-а-а`. Synthesis
+succeeded; automated output cannot establish perceptual quality, so the
+production transform remains opt-in/unresolved. No FB2 or full-book MP3 was
+added to Git.
 
 ## Limitations and review focus
 
@@ -95,8 +128,8 @@ is `MODEL_LIMITATION/UNRESOLVED`, and no production transform was introduced.
 - Resumed/partial chapter runs write artifact segment rows for processed
   chapters; the normalized book and changes remain available from the initial
   compiler write.
-- A live `git ls-remote origin` check failed with DNS resolution
-  (`Could not resolve host: github.com`); local Git is the source of truth.
+- The first live network check failed with DNS resolution, then the authorized
+  normal push succeeded through the approved network path.
 
 Suggested review focus: contextual-rule narrowness and negative controls,
 paragraph provenance through `SentenceSplitter`, artifact traceability, and
@@ -105,5 +138,6 @@ the unchanged pause/audio paths.
 ## Git/publication
 
 At handoff the worktree is clean and the feature branch is published at
-`origin/feat/tts-preprocessor-consolidation` (`c88785c043ea5126798da5b02e7a7d341d020bab`).
+`origin/feat/tts-preprocessor-consolidation` (final SHA recorded in the final
+commit and remote verification).
 No merge, rebase, force-push, or GitHub action was performed.

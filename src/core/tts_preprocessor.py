@@ -359,7 +359,10 @@ class TtsPreprocessor:
         apply("phrase.rodov", r"\bпредставители великих родов\b", "представители великих род+ов", "homograph", "lineage meaning")
         apply("phrase.litsa", r"\bкрасноте лица\b", "красноте лиц+а", "syntax-government", "красноте чего")
         apply("phrase.medium_day", r"\bв среду(?!\s+(?:обитания|окружение|среда))\b", "в ср+еду", "homograph", "day-of-week reading")
-        apply("phrase.lock", r"\b(?:дверной|навесной|висячий) замок\b", "зам+ок", "homograph", "lock meaning")
+        apply("phrase.medium_day_context", r"\b(провод\w+)\s+(свою\s+)?среду\b", r"\1 \2ср+еду", "homograph", "day-of-week object in a bounded conduct-schedule construction")
+        apply("phrase.lock", r"\b(дверной|навесной|висячий) замок\b", r"\1 зам+ок", "homograph", "lock meaning; preserve the modifier")
+        apply("phrase.lock_context", r"\bзамок(?=\s+(?:явно\s+)?не\s+желал\s+открываться\b)", "зам+ок", "homograph", "lock meaning from bounded opening context")
+        apply("phrase.lock_after_key", r"(\bключ,\s+но\s+)замок\b", r"\1зам+ок", "homograph", "lock meaning after an explicit key contrast")
         if self.profile and ("book9" in self.profile or "гимн шута" in self.profile):
             apply("project.galitsyn", r"\bГалицын(?:а|у|ым|е)?\b", self._galitsyn_replacement, "proper name", "explicit book profile pronunciation")
         return result
