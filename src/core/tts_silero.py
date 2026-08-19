@@ -259,6 +259,23 @@ def prepare_silero_text(text: str) -> str:
     return re.sub(r"[ \t]+", " ", result).strip()
 
 
+# Compatibility surface for callers that historically imported these helpers
+# from the Silero backend. The implementation now lives in the shared,
+# traceable preprocessing compiler.
+from src.core.tts_preprocessor import (  # noqa: E402
+    apply_pronunciations as _compiler_apply_pronunciations,
+    harden_silero_ru_preprocessing as _compiler_harden_silero_ru_preprocessing,
+    load_pronunciations as _compiler_load_pronunciations,
+    prepare_silero_text as _compiler_prepare_silero_text,
+    resolve_vse_vsyo_homographs as _compiler_resolve_vse_vsyo_homographs,
+)
+
+apply_pronunciations = _compiler_apply_pronunciations
+harden_silero_ru_preprocessing = _compiler_harden_silero_ru_preprocessing
+load_pronunciations = _compiler_load_pronunciations
+prepare_silero_text = _compiler_prepare_silero_text
+resolve_vse_vsyo_homographs = _compiler_resolve_vse_vsyo_homographs
+
 
 class SileroTTSManager(TTSBackend):
     """Менеджер синтеза речи через Silero TTS v5 (локальный).

@@ -75,6 +75,7 @@ class TTSConfig:
     pause_before_comment: float = 1.0  # секунд тишины перед комментарием
     pause_after_comment: float = 0.7  # секунд тишины после комментария
     pause_between_sentences: float = 0.3  # пауза между предложениями
+    pronunciation_profile: str = ""  # optional explicit book/project pronunciation profile
 
 
 # Словарь для обратной связи backend → читаемое название

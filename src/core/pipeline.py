@@ -18,6 +18,7 @@ from typing import Callable, List, Optional, Tuple
 
 from .fb2_parser import FB2Parser, ParsedBook
 from .sentence_splitter import SentenceSplitter
+from .tts_preprocessor import TtsPreprocessor, write_tts_artifacts
 from .pause_policy import classify_boundary, target_pause
 from .comment_manager import CommentManager, CommentConfig
 from .tts_manager import TTSManager, TTSConfig
@@ -195,10 +196,31 @@ class Pipeline:
             if not book.chapters:
                 raise ValueError("В книге нет глав")
 
-            total_chapters = len(book.chapters)
+            preprocessor = TtsPreprocessor(
+                backend=self.config.tts_config.backend,
+                profile=(
+                    self.config.tts_config.pronunciation_profile
+                    or book.metadata.title
+                ),
+            )
+            with self._diagnostic_stage("tts_preprocessing"):
+                normalized_book = preprocessor.compile_book(book)
+            artifact_stem = self.config.book_path.stem or "book"
+            tts_script_path, tts_changes_path = write_tts_artifacts(
+                normalized_book,
+                self.config.output_dir,
+                artifact_stem,
+            )
+            if self.diagnostics is not None:
+                self.diagnostics.register_sensitive_paths(
+                    tts_script_path,
+                    tts_changes_path,
+                )
+
+            total_chapters = len(normalized_book.chapters)
             start_chapter = self.config.chapter_start or 0
             end_chapter = self.config.chapter_end or total_chapters
-            chapters_to_process = book.chapters[start_chapter:end_chapter]
+            chapters_to_process = normalized_book.chapters[start_chapter:end_chapter]
             chapter_texts = [
                 "\n".join(chapter.paragraphs)
                 for chapter in chapters_to_process
@@ -240,6 +262,7 @@ class Pipeline:
                         )
 
             # Шаг 2-4: Обработка каждой главы
+            artifact_segments = []
             for idx, chapter in enumerate(chapters_to_process):
                 self._check_canceled(cancel_event)
 
@@ -265,6 +288,32 @@ class Pipeline:
                         book.metadata.lang,
                     )
                     sentences = [segment.text for segment in structured_segments]
+                normalized_chapter = normalized_book.chapters[chapter_num]
+                for segment_index, segment in enumerate(structured_segments, start=1):
+                    paragraph_number = (
+                        segment.source_paragraph_index
+                        if segment.source_paragraph_index is not None
+                        else 0
+                    )
+                    paragraph_id = (
+                        normalized_chapter.paragraph_ids[paragraph_number - 1]
+                        if 0 < paragraph_number <= len(normalized_chapter.paragraph_ids)
+                        else f"ch-{chapter_num + 1:04d}-title"
+                    )
+                    artifact_segments.append({
+                        "segment_id": f"ch-{chapter_num + 1:04d}-s-{segment_index:04d}",
+                        "source_paragraph": paragraph_id,
+                        "chapter": chapter_num + 1,
+                        "paragraph": paragraph_number,
+                        "boundary_before": segment.boundary_before,
+                        "text": segment.text,
+                    })
+                write_tts_artifacts(
+                    normalized_book,
+                    self.config.output_dir,
+                    artifact_stem,
+                    segments=artifact_segments,
+                )
 
                 if not sentences:
                     logger.warning("Глава %d пуста, пропуск", chapter_num + 1)

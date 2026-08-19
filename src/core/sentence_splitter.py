@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 class StructuredSegment:
     text: str
     boundary_before: str
+    source_paragraph_index: int | None = None
 
 
 class SentenceSplitter:
@@ -114,12 +115,14 @@ class SentenceSplitter:
             StructuredSegment(
                 text=text,
                 boundary_before="chapter_start" if index == 0 else "sentence",
+                source_paragraph_index=0,
             )
             for index, text in enumerate(title_segments)
         ]
         structured.extend(
             self._split_body_paragraphs(
                 paragraphs[len(title_parts):], lang, has_title=True,
+                paragraph_offset=len(title_parts),
             )
         )
         return structured
@@ -130,6 +133,7 @@ class SentenceSplitter:
         lang: str,
         *,
         has_title: bool,
+        paragraph_offset: int = 0,
     ) -> List[StructuredSegment]:
         structured: List[StructuredSegment] = []
         for paragraph_index, paragraph in enumerate(paragraphs):
@@ -142,7 +146,11 @@ class SentenceSplitter:
                     boundary = "chapter_start"
                 else:
                     boundary = "paragraph"
-                structured.append(StructuredSegment(text, boundary))
+                structured.append(StructuredSegment(
+                    text,
+                    boundary,
+                    paragraph_index + paragraph_offset + 1,
+                ))
         return structured
 
     @staticmethod
