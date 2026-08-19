@@ -1,5 +1,16 @@
 # Latest Codex report
 
+- Report: `codex-reports/2026-08-19_tts-preprocessor-consolidation_REPORT.md`
+- Run log: `codex-reports/logs/2026-08-19_tts-preprocessor-consolidation_RUNLOG.md`
+- Task: consolidate deterministic Russian TTS preprocessing before segmentation
+- Engineering branch: `feat/tts-preprocessor-consolidation`
+- Engineering SHA: `34033a887e797a7cc5a456d9cf589ab0e5b3b8be`
+- Verification: 301 passed, 51 subtests, compileall, lock check, diff check
+- Status: ready for review; push pending network check
+- Timestamp: 2026-08-19 (Europe/Stockholm)
+
+## Previous report
+
 - Report: `codex-reports/2026-08-09_ffmpeg-large-chapter-regression_REPORT.md`
 - Run log: `codex-reports/logs/2026-08-09_ffmpeg-large-chapter-regression_RUNLOG.md`
 - Task: fix FFmpeg failure during adaptive assembly of a 189-segment chapter
