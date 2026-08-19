@@ -6,7 +6,7 @@ Implementation complete locally. Engineering verdict: `READY_FOR_REVIEW`.
 
 - Repository: `alexsmolya/fb2-silero-audiobook`
 - Starting branch/SHA: `main` / `9fd35745ba294bd455307e90144b20169d52ee34`
-- Resulting engineering branch/SHA: `feat/tts-preprocessor-consolidation` / `34033a887e797a7cc5a456d9cf589ab0e5b3b8be`
+- Resulting engineering branch/SHA: `feat/tts-preprocessor-consolidation` / `ca443da718cbacb85790f807a0e82acac3f685ba`
 - Implementation commit: `34033a8 feat: consolidate deterministic TTS preprocessing`
 - Source FB2 files are not modified.
 
@@ -138,6 +138,5 @@ the unchanged pause/audio paths.
 ## Git/publication
 
 At handoff the worktree is clean and the feature branch is published at
-`origin/feat/tts-preprocessor-consolidation` (final SHA recorded in the final
-commit and remote verification).
+`origin/feat/tts-preprocessor-consolidation` (`ca443da718cbacb85790f807a0e82acac3f685ba`).
 No merge, rebase, force-push, or GitHub action was performed.
